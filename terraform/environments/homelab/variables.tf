@@ -1,0 +1,54 @@
+# Proxmox
+variable "proxmox_url" {
+  description = "Proxmox API endpoint, e.g. https://192.168.0.69:8006"
+  type        = string
+}
+
+variable "proxmox_api_token" {
+  description = "Proxmox API token, format: user@realm!token-id=secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "proxmox_node" {
+  description = "Proxmox node name"
+  type        = string
+  default     = "test"
+}
+
+# Teleport
+variable "teleport_proxy" {
+  description = "Teleport proxy address, e.g. teleport.example.com:443"
+  type        = string
+}
+
+variable "teleport_auth_server" {
+  description = "Teleport auth server for node joining, e.g. 192.168.0.199:3025"
+  type        = string
+  default     = "192.168.0.199:3025"
+}
+
+variable "teleport_ca_pin" {
+  description = "Teleport CA pin (sha256:...)"
+  type        = string
+  default     = "sha256:2b82ae8b8f92835b2f2886ad25537547ce7a59e79cdbacd4be311f4df41bb13b"
+}
+
+variable "teleport_identity_file_base64" {
+  description = "Base64-encoded Teleport identity file (from: tctl auth sign --format=file | base64)"
+  type        = string
+  sensitive   = true
+}
+
+# SSH
+variable "ssh_public_key" {
+  description = "SSH public key to inject into all nodes"
+  type        = string
+}
+
+# k3s scaling
+variable "worker_count" {
+  description = "Number of k3s worker nodes"
+  type        = number
+  default     = 1
+}

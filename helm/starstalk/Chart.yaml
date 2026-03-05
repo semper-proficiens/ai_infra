@@ -1,0 +1,14 @@
+apiVersion: v2
+name: starstalk
+description: Starstalk backend — portable Helm chart for homelab and production
+type: application
+version: 0.1.0
+appVersion: "latest"
+
+keywords:
+  - starstalk
+  - backend
+  - api
+
+maintainers:
+  - name: starstalk-team

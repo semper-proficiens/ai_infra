@@ -1,0 +1,26 @@
+# Homelab overrides — single replica, NodePort for direct access
+replicaCount: 1
+
+service:
+  type: NodePort
+  port: 8080
+  nodePort: 30080
+
+autoscaling:
+  enabled: false  # No HPA on homelab — single node cluster
+
+ingress:
+  enabled: false  # Access via NodePort or tsh kubectl port-forward
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+env:
+  LOG_LEVEL: "debug"
+  PORT: "8080"
+  ENVIRONMENT: "homelab"

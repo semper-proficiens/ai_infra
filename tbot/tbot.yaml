@@ -1,0 +1,23 @@
+version: v2
+
+teleport:
+  # Update this with your actual Teleport proxy address after tsh login
+  # Run: tsh status  to find it
+  proxy_server: TELEPORT_PROXY_ADDR_PLACEHOLDER
+
+  join_params:
+    # Get this token after terraform apply:
+    #   terraform -chdir=terraform/environments/homelab output bot_join_token
+    token_name: INFRA_BOT_JOIN_TOKEN_PLACEHOLDER
+    method: token
+
+outputs:
+  - type: identity
+    destination:
+      type: directory
+      # Short-lived SSH identity certs written here.
+      # scripts/bootstrap-k3s.sh reads from this directory.
+      path: ./tbot/output
+
+# Optional: run as a one-shot instead of daemon
+# oneshot: true
