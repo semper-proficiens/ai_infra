@@ -16,3 +16,15 @@ spec:
   kubernetes:
     allow:
       - service_account: "teleport:tbot"   # namespace:serviceaccount
+    # type: static_jwks — Teleport auth server is NOT inside k3s, so it cannot
+    # use in-cluster config to validate service account JWTs. Providing the k3s
+    # signing keys here lets Teleport validate tokens without API access.
+    type: static_jwks
+    static_jwks:
+      # The k3s SA token audience is not the Teleport cluster name, so we
+      # explicitly allow the audiences present in the default SA token.
+      allowed_audiences:
+        - https://kubernetes.default.svc.cluster.local
+        - k3s
+      jwks: |
+        {"keys":[{"use":"sig","kty":"RSA","kid":"OEhlbUTj-RV90e-j4vfIbuf4ubNGnuBQ2bucWD1noUE","alg":"RS256","n":"vx-CbG5kOpOOdUQfUNAS4nnZ0tKXhczM26LgkA3U796xjzHvlpEV53PB__6rcrgniPPd8LZEPO9xT3R5KkUaaiJpE81NglF9iMMHeFlf22CJZsfYQFJywecSrQ9S9irbBv9rAYJZJZzemM00bphkNTM3Pg6Q_SDlpzC00QQipTWM8apBjsDXuVjtjZNssBCKrgAvSJSiya9p7YWEhk4pFmKbIRioxsmBhUN8HAXsUhwjqG1CluojhGTxkwg50vuK3inV3_2epKlafklcy5N6XaFEec84nNs9FdZ0C8KCJwTEN-lmpQ78W7mYq7yw1y7U_8VeM86xfVTi_281Ge69Yw","e":"AQAB"}]}

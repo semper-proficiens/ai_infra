@@ -1,20 +1,19 @@
 # tbot — Teleport Machine ID Bot running inside k3s
 #
-# Uses the 'kubernetes' join method: no stored token needed.
-# The k3s ServiceAccount JWT is the identity — Teleport validates it via the
-# k8s API. Certificates auto-renew every hour forever without manual intervention.
+# Uses the 'kubernetes' join method with static_jwks: no stored token needed.
+# The k3s ServiceAccount JWT (audience=teleport.cluster.local) is the identity.
+# Teleport validates it using the k3s JWKS public keys stored in the ProvisionToken.
+# Certificates auto-renew every hour forever.
 #
-# Prerequisites (run once via tctl on auth server):
+# A sync sidecar watches /output and publishes the identity to
+# Secret/tbot-identity (teleport ns) every 30 minutes.
+# WSL2 pulls it via: make sync-tbot-identity
+#
+# Prerequisites (one-time on auth server via tsh):
 #   tctl bots add claude-bot-k8s --roles=bot-node-access
-#   tctl create -f k8s/teleport/tbot-token.yaml    # creates the ProvisionToken
+#   tctl create -f k8s/teleport/tbot-token.yaml
 #
-# Apply:
-#   kubectl apply -f k8s/teleport/tbot-deployment.yaml
-#
-# The bot identity is written to Secret/tbot-identity (namespace: teleport).
-# Consume from WSL2:
-#   kubectl get secret tbot-identity -n teleport \
-#     -o jsonpath='{.data.identity}' | base64 -d > ~/.local/share/tbot/identity/identity
+# Apply: kubectl apply -f k8s/teleport/tbot-deployment.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -26,28 +25,32 @@ metadata:
   name: tbot
   namespace: teleport
 ---
-# ClusterRole: tbot only needs to read its own serviceaccount token (projected)
-# No cluster permissions needed — the k8s join method uses the projected SA token
+# RBAC: tbot needs no k8s API access itself.
+# The sync sidecar needs Secret create/update in teleport namespace.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
-  name: tbot
-rules: []   # no k8s API permissions needed — tbot authenticates outbound to Teleport
+  name: tbot-secret-writer
+  namespace: teleport
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: tbot
+  name: tbot-secret-writer
+  namespace: teleport
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: tbot
+  kind: Role
+  name: tbot-secret-writer
 subjects:
   - kind: ServiceAccount
     name: tbot
     namespace: teleport
 ---
-# ConfigMap: tbot configuration using kubernetes join method
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -60,19 +63,17 @@ data:
 
     onboarding:
       join_method: kubernetes
-      token: tbot-k8s          # must match ProvisionToken name in Teleport
+      token: tbot-k8s
 
     storage:
-      type: memory              # ephemeral — identity is written to output below
+      type: memory
 
     outputs:
       - type: identity
         destination:
-          type: kubernetes_secret
-          name: tbot-identity
-          namespace: teleport
+          type: directory
+          path: /output
 ---
-# Deployment: runs tbot as a long-lived process inside k3s
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -92,15 +93,29 @@ spec:
     spec:
       serviceAccountName: tbot
       containers:
+        # ── tbot: continuously renews identity certs ──────────────────────────
         - name: tbot
-          image: public.ecr.aws/gravitational/tbot:15
+          image: public.ecr.aws/gravitational/teleport-distroless:15.5.4
+          command: ["tbot"]
           args:
             - start
             - --config=/etc/tbot/tbot.yaml
             - --log-format=json
+          env:
+            # Tell tbot to use the projected token (audience=cluster-name) rather
+            # than the default SA token which has the wrong audience for static_jwks.
+            - name: KUBERNETES_TOKEN_PATH
+              value: /var/run/secrets/tokens/bot-token
           volumeMounts:
             - name: config
               mountPath: /etc/tbot
+              readOnly: true
+            - name: output
+              mountPath: /output
+            # Projected token with audience=<cluster-name> (required by static_jwks).
+            # tbot reads this via KUBERNETES_TOKEN_PATH env var.
+            - name: bot-token
+              mountPath: /var/run/secrets/tokens
               readOnly: true
           resources:
             requests:
@@ -114,7 +129,56 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 65534
+
+        # ── sync sidecar: publishes identity to k8s Secret every 30 min ──────
+        - name: identity-sync
+          image: bitnami/kubectl:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Identity sync sidecar started"
+              while true; do
+                if [ -f /output/identity ]; then
+                  kubectl create secret generic tbot-identity \
+                    --from-file=identity=/output/identity \
+                    --namespace teleport \
+                    --dry-run=client -o yaml | kubectl apply -f - && \
+                    echo "$(date): identity synced to Secret/tbot-identity"
+                else
+                  echo "$(date): waiting for identity file..."
+                fi
+                sleep 1800
+              done
+          volumeMounts:
+            - name: output
+              mountPath: /output
+              readOnly: true
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            # tbot writes identity files as uid 65534 (nobody) mode 600.
+            # Run as the same uid so we can read them.
+            runAsUser: 65534
+
       volumes:
         - name: config
           configMap:
             name: tbot-config
+        - name: output
+          emptyDir: {}
+        # Projected service account token with audience=<teleport-cluster-name>.
+        # Teleport static_jwks validates aud against the cluster name.
+        # tbot v15 auto-reads /var/run/secrets/tokens/bot-token (over default SA token).
+        # Cluster name: ssj2-erniepy-Standard-PC-i440FX-PIIX-1996
+        - name: bot-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: bot-token
+                  expirationSeconds: 600
+                  audience: ssj2-erniepy-Standard-PC-i440FX-PIIX-1996
