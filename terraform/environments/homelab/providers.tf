@@ -6,24 +6,17 @@ terraform {
       source  = "bpg/proxmox"
       version = "~> 0.69"
     }
-    teleport = {
-      source  = "terraform.releases.teleport.dev/gravitational/teleport"
-      version = "~> 16.0"
-    }
   }
 }
 
+# Default provider = ssj1 (192.168.0.69)
 provider "proxmox" {
-  endpoint = var.proxmox_url
+  endpoint  = var.proxmox_url
   api_token = var.proxmox_api_token
   insecure  = true # self-signed cert on homelab
 
   ssh {
-    agent = true
+    agent    = true
+    username = "root"
   }
-}
-
-provider "teleport" {
-  addr        = var.teleport_proxy
-  identity_file_base64 = var.teleport_identity_file_base64
 }

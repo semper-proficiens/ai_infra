@@ -1,0 +1,11 @@
+# .deploy-creds — secrets for node provisioning scripts
+# Copy to .deploy-creds and fill in values. Never commit this file.
+#
+# Used by: scripts/seed-runner-env.sh
+
+# Vault AppRole credentials for the starstalk service
+# Get these from Vault: vault read auth/approle/role/starstalk/role-id
+VAULT_ROLE_ID=
+
+# Generate a new secret-id: vault write -f auth/approle/role/starstalk/secret-id
+VAULT_SECRET_ID=

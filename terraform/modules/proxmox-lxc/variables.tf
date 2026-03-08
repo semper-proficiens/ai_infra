@@ -85,3 +85,9 @@ variable "role" {
   description = "Node role label (e.g. github-runner, k3s-control, k3s-worker)"
   type        = string
 }
+
+variable "enable_nesting" {
+  description = "Enable LXC nesting (required to run Docker inside the container)"
+  type        = bool
+  default     = false
+}

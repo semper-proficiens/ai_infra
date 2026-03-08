@@ -1,0 +1,59 @@
+# Dev environment overrides
+# Deployed to namespace: starstalk-dev
+# Triggered by: push to dev branch in starstalk repo
+
+replicaCount: 1
+
+image:
+  repository: 192.168.0.77:5000/starstalk-backend
+  pullPolicy: Always   # always pull so 'dev' tag stays current
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+  hosts:
+    - host: api-dev.starstalk.io
+      paths:
+        - path: /
+          pathType: Prefix
+
+# No HPA for dev — fixed single replica keeps cost and noise down
+autoscaling:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+# No anti-affinity for dev — fine to co-locate on any node
+affinity: {}
+
+env:
+  LOG_LEVEL: "debug"
+  PORT: "8080"
+  ENVIRONMENT: "dev"
+  INFRA: "k8s"
+  # DB_HOST points at the dev CloudNativePG service within starstalk-dev namespace.
+  # If Vault provides DB_HOST, this is overridden at runtime — that's fine.
+  DB_HOST: "starstalk-pg-dev-rw.starstalk-dev.svc.cluster.local"
+  DB_PORT: "5432"
+
+# Vault creds from dev-specific k8s Secret
+secretEnv:
+  VAULT_ROLE_ID:
+    secretName: starstalk-vault
+    key: VAULT_ROLE_ID
+  VAULT_SECRET_ID:
+    secretName: starstalk-vault
+    key: VAULT_SECRET_ID

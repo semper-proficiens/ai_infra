@@ -1,0 +1,123 @@
+name: Deploy Backend
+
+# Triggered by starstalk CI via repository_dispatch — receives only the
+# image tag, never source code. All deploy secrets live here, not in starstalk.
+#
+# Also supports workflow_dispatch for manual re-deploys (e.g. rollback).
+#
+# Security notes:
+#   - Only repository_dispatch (authenticated PAT) and workflow_dispatch can trigger this.
+#   - pull_request is intentionally NOT a trigger — fork PRs cannot steal secrets.
+#   - Self-hosted runner access is gated by the trigger restrictions above.
+#   - Source code never enters this workflow; only the image tag crosses the boundary.
+
+on:
+  repository_dispatch:
+    types: [deploy-dev, deploy-prod]
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [dev, prod]
+      image_tag:
+        description: 'Image tag to deploy (e.g. dev, v1.2.3)'
+        required: true
+        type: string
+
+# ── Resolve inputs (works for both trigger types) ─────────────────────────────
+
+env:
+  TARGET_ENV: ${{ github.event.client_payload.environment || inputs.environment }}
+  IMAGE_TAG:  ${{ github.event.client_payload.image_tag  || inputs.image_tag }}
+
+jobs:
+  # ── Deploy to dev (auto, no approval) ───────────────────────────────────────
+  deploy-dev:
+    if: >
+      (github.event_name == 'repository_dispatch' && github.event.action == 'deploy-dev') ||
+      (github.event_name == 'workflow_dispatch'   && inputs.environment == 'dev')
+    runs-on: [self-hosted, proxmox]
+    environment:
+      name: dev
+      url: https://api-dev.starstalk.io
+
+    steps:
+      - name: Checkout ai_infra (Helm charts only — no private code)
+        uses: actions/checkout@v4
+
+      - name: Write kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "${{ secrets.KUBECONFIG_HOMELAB }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Refresh Vault credentials in starstalk-dev
+        env:
+          VAULT_ROLE_ID:    ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID:  ${{ secrets.VAULT_SECRET_ID }}
+        run: |
+          kubectl create secret generic starstalk-vault \
+            --from-literal=VAULT_ROLE_ID="${VAULT_ROLE_ID}" \
+            --from-literal=VAULT_SECRET_ID="${VAULT_SECRET_ID}" \
+            --namespace starstalk-dev \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm deploy → dev
+        run: |
+          helm upgrade --install starstalk-dev helm/starstalk \
+            --namespace starstalk-dev \
+            --set "image.tag=${{ env.IMAGE_TAG }}" \
+            -f helm/starstalk/values-dev.yaml \
+            --wait --timeout 3m
+
+      - name: Verify rollout
+        run: |
+          kubectl rollout status deployment/starstalk-dev -n starstalk-dev --timeout=120s
+          kubectl get pods -n starstalk-dev -o wide
+
+  # ── Deploy to prod (manual approval required) ────────────────────────────────
+  deploy-prod:
+    if: >
+      (github.event_name == 'repository_dispatch' && github.event.action == 'deploy-prod') ||
+      (github.event_name == 'workflow_dispatch'   && inputs.environment == 'prod')
+    runs-on: [self-hosted, proxmox]
+    environment:
+      name: prod
+      url: https://api.starstalk.io
+
+    steps:
+      - name: Checkout ai_infra (Helm charts only — no private code)
+        uses: actions/checkout@v4
+
+      - name: Write kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "${{ secrets.KUBECONFIG_HOMELAB }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Refresh Vault credentials in starstalk
+        env:
+          VAULT_ROLE_ID:    ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID:  ${{ secrets.VAULT_SECRET_ID }}
+        run: |
+          kubectl create secret generic starstalk-vault \
+            --from-literal=VAULT_ROLE_ID="${VAULT_ROLE_ID}" \
+            --from-literal=VAULT_SECRET_ID="${VAULT_SECRET_ID}" \
+            --namespace starstalk \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm deploy → prod
+        run: |
+          helm upgrade --install starstalk helm/starstalk \
+            --namespace starstalk \
+            --set "image.tag=${{ env.IMAGE_TAG }}" \
+            -f helm/starstalk/values-homelab.yaml \
+            --wait --timeout 3m
+
+      - name: Verify rollout
+        run: |
+          kubectl rollout status deployment/starstalk -n starstalk --timeout=120s
+          kubectl get pods -n starstalk -o wide

@@ -1,0 +1,90 @@
+# kube-prometheus-stack values for homelab
+# Install: helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#   --namespace monitoring --create-namespace \
+#   -f k8s/monitoring/prometheus-stack-values.yaml
+
+grafana:
+  enabled: true
+  adminPassword: ""   # Set via: --set grafana.adminPassword=<password>
+                      # Or create secret before install (see setup-k8s.sh)
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 5Gi
+
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - grafana.starstalk.io
+    paths:
+      - /
+
+  # Pre-load CloudNativePG dashboard
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+  dashboards:
+    default:
+      cnpg:
+        gnetId: 20417    # CloudNativePG official Grafana dashboard
+        revision: 1
+        datasource: Prometheus
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 10Gi
+
+    # Scrape CloudNativePG PodMonitors
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 1Gi
+
+# Resource limits — keep homelab footprint manageable
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
+
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: false        # k3s doesn't expose etcd metrics by default
+    general: true
+    kubeApiserverAvailability: true
+    kubePrometheusGeneral: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    node: true

@@ -3,6 +3,7 @@ CLAUDE.local.md
 .cloudflare-creds
 .github-creds
 .proxmox-creds
+.deploy-creds
 
 # Terraform
 *.tfstate
@@ -16,3 +17,5 @@ tbot/output/
 
 # Swarm
 .swarm/
+.k8s-creds
+kubeconfig

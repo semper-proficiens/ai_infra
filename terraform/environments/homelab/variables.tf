@@ -17,11 +17,6 @@ variable "proxmox_node" {
 }
 
 # Teleport
-variable "teleport_proxy" {
-  description = "Teleport proxy address, e.g. teleport.example.com:443"
-  type        = string
-}
-
 variable "teleport_auth_server" {
   description = "Teleport auth server for node joining, e.g. 192.168.0.199:3025"
   type        = string
@@ -34,8 +29,17 @@ variable "teleport_ca_pin" {
   default     = "sha256:2b82ae8b8f92835b2f2886ad25537547ce7a59e79cdbacd4be311f4df41bb13b"
 }
 
-variable "teleport_identity_file_base64" {
-  description = "Base64-encoded Teleport identity file (from: tctl auth sign --format=file | base64)"
+# Teleport provision tokens — create once with:
+#   tctl tokens add --type=node --ttl=87600h
+# Then paste the token value here (gitignored in terraform.tfvars)
+variable "vm_join_token" {
+  description = "Teleport node join token for VMs (k3s control + workers)"
+  type        = string
+  sensitive   = true
+}
+
+variable "lxc_join_token" {
+  description = "Teleport node join token for LXC containers (runner)"
   type        = string
   sensitive   = true
 }
@@ -46,9 +50,11 @@ variable "ssh_public_key" {
   type        = string
 }
 
-# k3s scaling
+# k3s scaling — workers on ssj1
 variable "worker_count" {
-  description = "Number of k3s worker nodes"
+  description = "Number of k3s worker nodes on ssj1"
   type        = number
   default     = 1
 }
+
+# ssj2 variables reserved for future use

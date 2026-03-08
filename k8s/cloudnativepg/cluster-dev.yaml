@@ -1,0 +1,51 @@
+---
+# CloudNativePG Cluster — starstalk-dev PostgreSQL
+# Single instance (no standby). Dev doesn't need HA — it just needs to work.
+#
+# Before applying:
+#   kubectl create secret generic starstalk-pg-dev-superuser \
+#     --from-literal=username=postgres \
+#     --from-literal=password=<PASSWORD> \
+#     --namespace starstalk-dev
+#   kubectl create secret generic starstalk-pg-dev-app \
+#     --from-literal=username=starstalk \
+#     --from-literal=password=<APP-PASSWORD> \
+#     --namespace starstalk-dev
+#
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: starstalk-pg-dev
+  namespace: starstalk-dev
+spec:
+  instances: 1
+
+  postgresql:
+    parameters:
+      max_connections: "50"
+      shared_buffers: "64MB"
+
+  bootstrap:
+    initdb:
+      database: starstalk
+      owner: starstalk
+      secret:
+        name: starstalk-pg-dev-app
+
+  superuserSecret:
+    name: starstalk-pg-dev-superuser
+
+  storage:
+    size: 5Gi
+    storageClass: local-path
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  monitoring:
+    enablePodMonitor: false

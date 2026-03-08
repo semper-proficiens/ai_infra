@@ -1,26 +1,64 @@
-# Homelab overrides — single replica, NodePort for direct access
-replicaCount: 1
+# Homelab overrides — 2 replicas spread across both Proxmox hosts
+replicaCount: 2
+
+image:
+  repository: 192.168.0.77:5000/starstalk-backend
+  pullPolicy: Always
 
 service:
-  type: NodePort
+  type: ClusterIP
   port: 8080
-  nodePort: 30080
-
-autoscaling:
-  enabled: false  # No HPA on homelab — single node cluster
+  targetPort: 8080
 
 ingress:
-  enabled: false  # Access via NodePort or tsh kubectl port-forward
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+  hosts:
+    - host: api.starstalk.io
+      paths:
+        - path: /
+          pathType: Prefix
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
 
 resources:
   requests:
-    cpu: 50m
-    memory: 64Mi
+    cpu: 100m
+    memory: 128Mi
   limits:
     cpu: 500m
-    memory: 256Mi
+    memory: 512Mi
+
+# Spread pods across different physical nodes so a single Proxmox host
+# failure takes down at most one replica.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: starstalk
+          topologyKey: kubernetes.io/hostname
 
 env:
-  LOG_LEVEL: "debug"
+  LOG_LEVEL: "info"
   PORT: "8080"
   ENVIRONMENT: "homelab"
+  INFRA: "k8s"
+
+# Vault AppRole creds are stored in k8s Secret "starstalk-vault"
+# (created/refreshed by the deploy workflow on every release).
+secretEnv:
+  VAULT_ROLE_ID:
+    secretName: starstalk-vault
+    key: VAULT_ROLE_ID
+  VAULT_SECRET_ID:
+    secretName: starstalk-vault
+    key: VAULT_SECRET_ID

@@ -1,0 +1,64 @@
+---
+# CloudNativePG Cluster — starstalk PostgreSQL
+# Primary on one k3s worker, standby on the other (different Proxmox hosts).
+# Automatic failover: if the primary pod crashes, CloudNativePG promotes the
+# standby within ~30s without any manual intervention.
+#
+# Before applying:
+#   kubectl create secret generic starstalk-pg-superuser \
+#     --from-literal=username=postgres \
+#     --from-literal=password=<STRONG-PASSWORD> \
+#     --namespace starstalk
+#   kubectl create secret generic starstalk-pg-app \
+#     --from-literal=username=starstalk \
+#     --from-literal=password=<APP-PASSWORD> \
+#     --namespace starstalk
+#
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: starstalk-pg
+  namespace: starstalk
+spec:
+  instances: 2
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "256MB"
+      effective_cache_size: "768MB"
+      wal_level: logical
+
+  bootstrap:
+    initdb:
+      database: starstalk
+      owner: starstalk
+      secret:
+        name: starstalk-pg-app
+
+  superuserSecret:
+    name: starstalk-pg-superuser
+
+  storage:
+    size: 20Gi
+    storageClass: local-path   # k3s default — data lives on the node's disk
+
+  # Spread primary and standby across different physical nodes.
+  # When k3s-worker-0 (ssj1) and k3s-worker-1 (ssj2) are the only workers,
+  # this guarantees each instance is on a different Proxmox host.
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: preferred
+
+  # Monitoring: CloudNativePG exposes Prometheus metrics on port 9187
+  monitoring:
+    enablePodMonitor: false
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi

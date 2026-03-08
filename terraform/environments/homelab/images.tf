@@ -1,14 +1,13 @@
-# Download Ubuntu 24.04 cloud image to Proxmox local storage once
-# Used by all proxmox-vm module instances as the base OS image
-resource "proxmox_virtual_environment_download_file" "ubuntu_24_04" {
-  node_name    = var.proxmox_node
+# Ubuntu 24.04 cloud image — downloaded once manually on the Proxmox host:
+#   wget -O /var/lib/vz/template/iso/noble-server-cloudimg-amd64.img \
+#     https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+#
+# Referenced as a data source so Terraform does not try to re-download it
+# (avoids needing Sys.Modify privilege on the download URL API endpoint).
+
+data "proxmox_virtual_environment_file" "ubuntu_24_04" {
   content_type = "iso"
   datastore_id = "local"
-
-  # Noble Numbat (24.04 LTS) cloud image — SHA256 verified by Proxmox
-  url       = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
-  file_name = "noble-server-cloudimg-amd64.img"
-
-  # Only re-download if the upstream image changes checksum
-  overwrite = false
+  node_name    = var.proxmox_node
+  file_name    = "noble-server-cloudimg-amd64.img"
 }

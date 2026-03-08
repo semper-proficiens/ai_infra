@@ -1,24 +1,35 @@
 # Copy this file to terraform.tfvars and fill in your values.
 # terraform.tfvars is gitignored — never commit secrets.
 
-# Proxmox
+# ── ssj1 — primary Proxmox (192.168.0.69) ────────────────────────────────────
 proxmox_url       = "https://192.168.0.69:8006"
-proxmox_api_token = "automation@pve!claude-code=<YOUR-TOKEN-SECRET>"
+proxmox_api_token = "automation@pve!claude-code=<SSJ1-TOKEN-SECRET>"
 proxmox_node      = "test"
 
-# Teleport
-# Get proxy address from: tsh status  OR  the Teleport web UI URL
-teleport_proxy       = "teleport.example.com:443"
+# ── ssj2 — second Proxmox (192.168.0.84) ─────────────────────────────────────
+# Create token on ssj2: Datacenter → Permissions → API Tokens → Add
+# Grant same role as ssj1: PVEVMAdmin + Datastore.AllocateSpace on /
+ssj2_proxmox_url       = "https://192.168.0.84:8006"
+ssj2_proxmox_api_token = "automation@pve!claude-code=<SSJ2-TOKEN-SECRET>"
+ssj2_proxmox_node      = "pve"  # check in ssj2 web UI → node name in left panel
+
+# ssj2 worker placement (defaults work for most setups)
+# ssj2_worker_vmid    = 122
+# ssj2_worker_ip_cidr = "192.168.0.82/24"
+
+# ── Teleport ──────────────────────────────────────────────────────────────────
+teleport_proxy       = "teleport.starstalk.io:443"
 teleport_auth_server = "192.168.0.199:3025"
 teleport_ca_pin      = "sha256:2b82ae8b8f92835b2f2886ad25537547ce7a59e79cdbacd4be311f4df41bb13b"
 
-# Generate the identity file:
+# Generate the identity file (run once, valid 10 years):
 #   tctl auth sign --user=admin --format=file --out=/tmp/terraform-id --ttl=87600h
 #   base64 -w0 /tmp/terraform-id && echo
 teleport_identity_file_base64 = "<BASE64-ENCODED-IDENTITY-FILE>"
 
-# SSH key to inject into all nodes
+# ── SSH ───────────────────────────────────────────────────────────────────────
 ssh_public_key = "ssh-ed25519 AAAA... your-key-comment"
 
-# k3s scaling — bump this number and run terraform apply
+# ── k3s ───────────────────────────────────────────────────────────────────────
+# Workers on ssj1. ssj2 always gets exactly 1 worker (k3s-worker-1).
 worker_count = 1
