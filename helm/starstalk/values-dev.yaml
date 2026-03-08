@@ -10,14 +10,16 @@ image:
 
 service:
   type: ClusterIP
-  port: 8080
-  targetPort: 8080
+  port: 443
+  targetPort: 443
 
 ingress:
   enabled: true
   className: traefik
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    # Backend serves HTTPS — forward traffic as-is, skip cert verification
+    traefik.ingress.kubernetes.io/service.serverstransport: insecure@file
   hosts:
     - host: api-dev.starstalk.io
       paths:
@@ -38,6 +40,22 @@ resources:
 
 # No anti-affinity for dev — fine to co-locate on any node
 affinity: {}
+
+# Override probes — Vault sets ENVIRONMENT=prod so app binds on 443 (HTTPS).
+# TODO: create a dev-specific Vault path with ENVIRONMENT=dev once Teleport is renewed.
+livenessProbe:
+  httpGet: null
+  tcpSocket:
+    port: 443
+  initialDelaySeconds: 10
+  periodSeconds: 15
+
+readinessProbe:
+  httpGet: null
+  tcpSocket:
+    port: 443
+  initialDelaySeconds: 5
+  periodSeconds: 10
 
 env:
   LOG_LEVEL: "debug"

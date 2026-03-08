@@ -54,14 +54,14 @@ secretEnv:
 
 livenessProbe:
   httpGet:
-    path: /healthz
+    path: /health
     port: 8080
   initialDelaySeconds: 10
   periodSeconds: 15
 
 readinessProbe:
   httpGet:
-    path: /healthz
+    path: /health
     port: 8080
   initialDelaySeconds: 5
   periodSeconds: 10
