@@ -132,7 +132,7 @@ defaultRules:
   create: true
   rules:
     alertmanager: true
-    etcd: false        # k3s doesn't expose etcd metrics by default
+    etcd: false                    # k3s doesn't expose etcd metrics by default
     general: true
     kubeApiserverAvailability: true
     kubePrometheusGeneral: true
@@ -141,3 +141,8 @@ defaultRules:
     kubernetesStorage: true
     kubernetesSystem: true
     node: true
+    # k3s runs these components as embedded processes — no separate metrics endpoints.
+    # Disabling prevents persistent critical spam from the default rules.
+    kubeControllerManager: false   # KubeControllerManagerDown: not scraped in k3s
+    kubeScheduler: false           # KubeSchedulerDown: not scraped in k3s
+    kubeProxy: false               # KubeProxyDown: k3s uses kube-router, not kube-proxy
