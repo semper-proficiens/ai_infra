@@ -248,7 +248,7 @@ spec:
             summary: "Node {{ $labels.instance }} disk < 20% free"
             description: >
               Node {{ $labels.instance }} has less than 20% disk space available
-              on the root filesystem. Free space: {{ $value | printf \"%.1f\" }}%.
+              on the root filesystem.
 
         - alert: NodeDiskSpaceCritical
           expr: |
@@ -262,4 +262,4 @@ spec:
             summary: "Node {{ $labels.instance }} disk < 10% free — CRITICAL"
             description: >
               Node {{ $labels.instance }} has less than 10% disk space. Pods may
-              be evicted. Free space: {{ $value | printf \"%.1f\" }}%.
+              be evicted.
