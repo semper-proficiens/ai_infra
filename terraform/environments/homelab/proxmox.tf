@@ -34,7 +34,7 @@ module "k3s_control" {
   vmid        = 120
   hostname    = "k3s-control"
   cores       = 2
-  memory_mb   = 2048
+  memory_mb   = 4096
   disk_gb     = 20
   ip_cidr     = "192.168.0.80/24"
   gateway     = "192.168.0.1"
