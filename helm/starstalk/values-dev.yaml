@@ -18,8 +18,8 @@ ingress:
   className: traefik
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-    # Backend serves HTTPS — forward traffic as-is, skip cert verification
-    traefik.ingress.kubernetes.io/service.serverstransport: insecure@file
+    # Backend serves HTTPS on 443 — tell Traefik to connect via HTTPS
+    traefik.ingress.kubernetes.io/service.serversscheme: https
   hosts:
     - host: api-dev.starstalk.io
       paths:
