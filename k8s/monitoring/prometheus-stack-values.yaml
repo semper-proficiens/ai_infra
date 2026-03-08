@@ -12,15 +12,33 @@ grafana:
     storageClassName: local-path
     size: 5Gi
 
+  # Disable init-chown-data — the PVC already has correct ownership from initial
+  # install; the chown init container fails on upgrade due to root permission
+  # restrictions in newer busybox images on an already-populated PVC.
+  initChownData:
+    enabled: false
+
+  # Auth proxy — lets CF Access auto-login users at monitor.starstalk.io.
+  # CF Access sets Cf-Access-Authenticated-User-Email after Google auth.
+  # grafana.starstalk.io (no CF Access header) falls back to Grafana login form.
+  grafana.ini:
+    auth.proxy:
+      enabled: true
+      header_name: Cf-Access-Authenticated-User-Email
+      header_property: email
+      auto_sign_up: true
+      default_role: Viewer
+
   ingress:
     enabled: true
     ingressClassName: traefik
     hosts:
       - grafana.starstalk.io
+      - monitor.starstalk.io
     paths:
       - /
 
-  # Pre-load CloudNativePG dashboard
+  # Pre-load dashboards
   dashboardProviders:
     dashboardproviders.yaml:
       apiVersion: 1
@@ -36,8 +54,20 @@ grafana:
   dashboards:
     default:
       cnpg:
-        gnetId: 20417    # CloudNativePG official Grafana dashboard
+        gnetId: 20417    # CloudNativePG official dashboard
         revision: 1
+        datasource: Prometheus
+      k8s-views-namespaces:
+        gnetId: 15760    # Kubernetes / Views / Namespaces — dev vs prod at a glance
+        revision: 35
+        datasource: Prometheus
+      k8s-views-pods:
+        gnetId: 15761    # Kubernetes / Views / Pods — per-pod CPU/memory/restarts
+        revision: 16
+        datasource: Prometheus
+      k8s-workloads-namespace:
+        gnetId: 13659    # Kubernetes / Compute Resources / Namespace (Workloads)
+        revision: 3
         datasource: Prometheus
 
 prometheus:
