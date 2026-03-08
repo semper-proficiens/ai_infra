@@ -1,0 +1,18 @@
+# ProvisionToken for tbot kubernetes join method
+#
+# Apply to Teleport auth server via:
+#   tctl create -f /tmp/tbot-token.yaml
+#
+# This token never expires and validates the k3s ServiceAccount JWT
+# against the k3s cluster API — no stored secret anywhere.
+kind: token
+version: v2
+metadata:
+  name: tbot-k8s
+spec:
+  roles: [Bot]
+  join_method: kubernetes
+  bot_name: claude-bot-k8s
+  kubernetes:
+    allow:
+      - service_account: "teleport:tbot"   # namespace:serviceaccount

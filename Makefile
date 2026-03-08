@@ -156,3 +156,15 @@ apply-monitoring:
 ## create-grafana-sa: Create Grafana automation service account + store token as k8s secret
 create-grafana-sa:
 	KUBECONFIG=$(KUBECONFIG) ./scripts/create-grafana-service-account.sh
+
+## sync-tbot-identity: Pull fresh tbot identity from k8s Secret to WSL2
+sync-tbot-identity:
+	KUBECONFIG=$(KUBECONFIG) ./scripts/sync-tbot-identity.sh
+
+## install-tbot-sync-timer: Install systemd timer to auto-refresh tbot identity every 30m
+install-tbot-sync-timer:
+	KUBECONFIG=$(KUBECONFIG) ./scripts/install-tbot-sync-timer.sh
+
+## deploy-tbot-k8s: Deploy tbot inside k3s (kubernetes join method — no token ever needed)
+deploy-tbot-k8s:
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/teleport/

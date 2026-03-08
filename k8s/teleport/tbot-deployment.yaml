@@ -1,0 +1,120 @@
+# tbot — Teleport Machine ID Bot running inside k3s
+#
+# Uses the 'kubernetes' join method: no stored token needed.
+# The k3s ServiceAccount JWT is the identity — Teleport validates it via the
+# k8s API. Certificates auto-renew every hour forever without manual intervention.
+#
+# Prerequisites (run once via tctl on auth server):
+#   tctl bots add claude-bot-k8s --roles=bot-node-access
+#   tctl create -f k8s/teleport/tbot-token.yaml    # creates the ProvisionToken
+#
+# Apply:
+#   kubectl apply -f k8s/teleport/tbot-deployment.yaml
+#
+# The bot identity is written to Secret/tbot-identity (namespace: teleport).
+# Consume from WSL2:
+#   kubectl get secret tbot-identity -n teleport \
+#     -o jsonpath='{.data.identity}' | base64 -d > ~/.local/share/tbot/identity/identity
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: teleport
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tbot
+  namespace: teleport
+---
+# ClusterRole: tbot only needs to read its own serviceaccount token (projected)
+# No cluster permissions needed — the k8s join method uses the projected SA token
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tbot
+rules: []   # no k8s API permissions needed — tbot authenticates outbound to Teleport
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tbot
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tbot
+subjects:
+  - kind: ServiceAccount
+    name: tbot
+    namespace: teleport
+---
+# ConfigMap: tbot configuration using kubernetes join method
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tbot-config
+  namespace: teleport
+data:
+  tbot.yaml: |
+    version: v2
+    proxy_server: teleport.starstalk.io:443
+
+    onboarding:
+      join_method: kubernetes
+      token: tbot-k8s          # must match ProvisionToken name in Teleport
+
+    storage:
+      type: memory              # ephemeral — identity is written to output below
+
+    outputs:
+      - type: identity
+        destination:
+          type: kubernetes_secret
+          name: tbot-identity
+          namespace: teleport
+---
+# Deployment: runs tbot as a long-lived process inside k3s
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tbot
+  namespace: teleport
+  labels:
+    app: tbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tbot
+  template:
+    metadata:
+      labels:
+        app: tbot
+    spec:
+      serviceAccountName: tbot
+      containers:
+        - name: tbot
+          image: public.ecr.aws/gravitational/tbot:15
+          args:
+            - start
+            - --config=/etc/tbot/tbot.yaml
+            - --log-format=json
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tbot
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+      volumes:
+        - name: config
+          configMap:
+            name: tbot-config
