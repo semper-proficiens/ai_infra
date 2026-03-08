@@ -19,3 +19,5 @@ tbot/output/
 .swarm/
 .k8s-creds
 kubeconfig
+.alert-creds
+k8s/monitoring/alertmanager-config.yaml

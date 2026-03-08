@@ -1,0 +1,64 @@
+# Alertmanager config template — routing structure for starstalk alerts.
+#
+# DO NOT commit a filled-in version of this file.
+# Real values are in Secret/alertmanager-config-email, created by:
+#   make setup-alert-email
+#
+# Replace <YOUR_EMAIL> and <GMAIL_APP_PASSWORD> then run:
+#   make setup-alert-email  (reads from .alert-creds automatically)
+
+global:
+  smtp_smarthost: smtp.gmail.com:587
+  smtp_from: <YOUR_EMAIL>
+  smtp_auth_username: <YOUR_EMAIL>
+  smtp_auth_password: <GMAIL_APP_PASSWORD>    # Gmail App Password — NOT your login password
+  smtp_require_tls: true
+  resolve_timeout: 5m
+
+# Route tree — critical fires immediately, warnings batch per 5 min
+route:
+  receiver: email-all
+  group_by: [alertname, namespace, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Critical: immediate, short repeat
+    - matchers:
+        - severity = critical
+      receiver: email-critical
+      group_wait: 0s
+      repeat_interval: 1h
+    # Warning: batch, moderate repeat
+    - matchers:
+        - severity = warning
+      receiver: email-all
+      group_wait: 2m
+      repeat_interval: 4h
+    # Info: batch, long repeat (disk low, high resource usage)
+    - matchers:
+        - severity = info
+      receiver: email-all
+      group_wait: 10m
+      repeat_interval: 12h
+
+receivers:
+  - name: email-critical
+    email_configs:
+      - to: <YOUR_EMAIL>
+        send_resolved: true
+        headers:
+          subject: '[CRITICAL] {{ .GroupLabels.alertname }} — {{ .GroupLabels.namespace }}'
+
+  - name: email-all
+    email_configs:
+      - to: <YOUR_EMAIL>
+        send_resolved: true
+        headers:
+          subject: '[{{ .CommonLabels.severity | toUpper }}] {{ .GroupLabels.alertname }} — {{ .GroupLabels.namespace }}'
+
+inhibit_rules:
+  # Suppress warning when critical is already firing for the same alert+namespace
+  - source_matchers: [severity = critical]
+    target_matchers: [severity = warning]
+    equal: [alertname, namespace]
