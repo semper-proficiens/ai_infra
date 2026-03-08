@@ -1,0 +1,75 @@
+# v2 (Rust) dev environment overrides
+# Deployed to namespace: starstalk-dev
+# Release name: starstalk-dev-v2
+# Triggered by: deploy-dev-v2 dispatch from starstalk repo
+#
+# v2 binary binds on port 8082 (HTTP, no TLS) — Traefik handles TLS.
+# Ingress: api-dev-v2.starstalk.io → this service.
+
+replicaCount: 1
+
+image:
+  repository: 192.168.0.77:5000/starstalk-backend-v2
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8082
+  targetPort: 8082
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+  hosts:
+    - host: api-dev-v2.starstalk.io
+      paths:
+        - path: /
+          pathType: Prefix
+
+autoscaling:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
+
+affinity: {}
+
+# v2 is HTTP on 8082 — use httpGet probe
+livenessProbe:
+  httpGet:
+    path: /v2/healthcheck
+    port: 8082
+  initialDelaySeconds: 10
+  periodSeconds: 15
+
+readinessProbe:
+  httpGet:
+    path: /v2/healthcheck
+    port: 8082
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+env:
+  LOG_LEVEL: "debug"
+  V2_PORT: "8082"
+  ENVIRONMENT: "dev"
+  INFRA: "k8s"
+  DB_HOST: "starstalk-pg-dev-rw.starstalk-dev.svc.cluster.local"
+  DB_PORT: "5432"
+
+# Reuse the same Vault creds as v1 dev — reads from secret/starstalk (same AppRole).
+# Once setup-vault-dev-path.sh creates secret/starstalk-dev, swap to starstalk-vault-dev-v2.
+secretEnv:
+  VAULT_ROLE_ID:
+    secretName: starstalk-vault-dev
+    key: VAULT_ROLE_ID
+  VAULT_SECRET_ID:
+    secretName: starstalk-vault-dev
+    key: VAULT_SECRET_ID

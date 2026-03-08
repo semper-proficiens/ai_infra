@@ -1,0 +1,84 @@
+# v2 (Rust) homelab/prod overrides
+# Deployed to namespace: starstalk
+# Release name: starstalk-v2
+# Triggered by: deploy-prod-v2 dispatch from starstalk repo
+#
+# v2 binary binds on port 8082 (HTTP, no TLS) — Traefik handles TLS.
+# Ingress: api-v2.starstalk.io → this service.
+
+replicaCount: 2
+
+image:
+  repository: 192.168.0.77:5000/starstalk-backend-v2
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8082
+  targetPort: 8082
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+  hosts:
+    - host: api-v2.starstalk.io
+      paths:
+        - path: /
+          pathType: Prefix
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Spread pods across physical nodes
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: starstalk
+          topologyKey: kubernetes.io/hostname
+
+# v2 is HTTP on 8082 — use httpGet probe
+livenessProbe:
+  httpGet:
+    path: /v2/healthcheck
+    port: 8082
+  initialDelaySeconds: 10
+  periodSeconds: 15
+
+readinessProbe:
+  httpGet:
+    path: /v2/healthcheck
+    port: 8082
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+env:
+  LOG_LEVEL: "info"
+  V2_PORT: "8082"
+  ENVIRONMENT: "homelab"
+  INFRA: "k8s"
+
+# Reuse the same Vault creds as v1 prod (reads secret/starstalk).
+secretEnv:
+  VAULT_ROLE_ID:
+    secretName: starstalk-vault
+    key: VAULT_ROLE_ID
+  VAULT_SECRET_ID:
+    secretName: starstalk-vault
+    key: VAULT_SECRET_ID
