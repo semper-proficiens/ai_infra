@@ -7,8 +7,8 @@ image:
 
 service:
   type: ClusterIP
-  port: 8080
-  targetPort: 8080
+  port: 443
+  targetPort: 443
 
 ingress:
   enabled: true
@@ -46,6 +46,22 @@ affinity:
             matchLabels:
               app.kubernetes.io/name: starstalk
           topologyKey: kubernetes.io/hostname
+
+# Prod backend binds on 443 (HTTPS) — Vault provides ENVIRONMENT=prod.
+# TCP probe on 443 avoids the need to validate TLS certs in the probe.
+livenessProbe:
+  httpGet: null
+  tcpSocket:
+    port: 443
+  initialDelaySeconds: 10
+  periodSeconds: 15
+
+readinessProbe:
+  httpGet: null
+  tcpSocket:
+    port: 443
+  initialDelaySeconds: 5
+  periodSeconds: 10
 
 env:
   LOG_LEVEL: "info"
