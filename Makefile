@@ -1,6 +1,7 @@
 .PHONY: help plan apply destroy bootstrap-k3s merge-kubeconfig \
         status ssh logs seed-runner-env setup-runner \
-        renew-teleport-bot setup-vault-dev
+        renew-teleport-bot setup-vault-dev \
+        apply-monitoring create-grafana-sa
 
 TERRAFORM_DIR := terraform/environments/homelab
 TSH_PROXY     ?= teleport.starstalk.io
@@ -144,3 +145,14 @@ helm-diff-dev:
 	KUBECONFIG=$(KUBECONFIG) helm diff upgrade starstalk-dev helm/starstalk \
 		--namespace starstalk-dev \
 		-f helm/starstalk/values-dev.yaml
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+
+## apply-monitoring: Apply dashboards + alert rules (idempotent)
+apply-monitoring:
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/monitoring/dashboards/
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/monitoring/alerts/
+
+## create-grafana-sa: Create Grafana automation service account + store token as k8s secret
+create-grafana-sa:
+	KUBECONFIG=$(KUBECONFIG) ./scripts/create-grafana-service-account.sh

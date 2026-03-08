@@ -1,0 +1,265 @@
+# Starstalk PrometheusRule — pod, deployment, and infrastructure alerts
+# Applied to both starstalk (prod) and starstalk-dev namespaces.
+#
+# Apply: kubectl apply -f k8s/monitoring/alerts/starstalk-alerts.yaml
+# Verify: kubectl get prometheusrule -n monitoring
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: starstalk-alerts
+  namespace: monitoring
+  labels:
+    # Must match the PrometheusRule selector in kube-prometheus-stack
+    release: kube-prometheus-stack
+    app: kube-prometheus-stack
+spec:
+  groups:
+
+    # ── Pod health ────────────────────────────────────────────────────────────
+    - name: starstalk.pods
+      interval: 30s
+      rules:
+
+        - alert: StarstalkPodNotReady
+          expr: |
+            kube_pod_status_ready{
+              namespace=~"starstalk|starstalk-dev",
+              condition="false"
+            } == 1
+          for: 5m
+          labels:
+            severity: warning
+            team: starstalk
+          annotations:
+            summary: "Pod {{ $labels.pod }} not ready ({{ $labels.namespace }})"
+            description: >
+              Pod {{ $labels.pod }} in {{ $labels.namespace }} has been not-ready
+              for more than 5 minutes. Check: kubectl describe pod {{ $labels.pod }}
+              -n {{ $labels.namespace }}
+
+        - alert: StarstalkPodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total{
+              namespace=~"starstalk|starstalk-dev"
+            }[15m]) * 60 * 15 > 3
+          for: 5m
+          labels:
+            severity: critical
+            team: starstalk
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash-looping ({{ $labels.namespace }})"
+            description: >
+              Pod {{ $labels.pod }} in {{ $labels.namespace }} has restarted
+              more than 3 times in the last 15 minutes.
+
+        - alert: StarstalkPodRestartingFrequently
+          expr: |
+            increase(kube_pod_container_status_restarts_total{
+              namespace=~"starstalk|starstalk-dev"
+            }[1h]) > 5
+          for: 0m
+          labels:
+            severity: warning
+            team: starstalk
+          annotations:
+            summary: "Pod {{ $labels.pod }} restarted {{ $value | printf \"%.0f\" }}x in 1h"
+            description: >
+              Pod {{ $labels.pod }} (container: {{ $labels.container }})
+              in {{ $labels.namespace }} has restarted more than 5 times in the past hour.
+
+    # ── Deployment health ─────────────────────────────────────────────────────
+    - name: starstalk.deployments
+      interval: 30s
+      rules:
+
+        - alert: StarstalkDeploymentUnavailable
+          expr: |
+            kube_deployment_status_replicas_available{
+              namespace=~"starstalk|starstalk-dev"
+            } == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: starstalk
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} has 0 replicas ({{ $labels.namespace }})"
+            description: >
+              Deployment {{ $labels.deployment }} in {{ $labels.namespace }}
+              has no available replicas for > 2 minutes. Service is down.
+
+        - alert: StarstalkDeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas{namespace=~"starstalk|starstalk-dev"}
+            != kube_deployment_status_replicas_available{namespace=~"starstalk|starstalk-dev"}
+          for: 10m
+          labels:
+            severity: warning
+            team: starstalk
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} replica mismatch ({{ $labels.namespace }})"
+            description: >
+              Deployment {{ $labels.deployment }} in {{ $labels.namespace }}
+              desires {{ $value }} replicas but has fewer available for > 10 minutes.
+
+    # ── Resource usage ────────────────────────────────────────────────────────
+    - name: starstalk.resources
+      interval: 60s
+      rules:
+
+        - alert: StarstalkHighCPU
+          expr: |
+            sum by (namespace) (
+              rate(container_cpu_usage_seconds_total{
+                namespace=~"starstalk|starstalk-dev",
+                container!="", container!="POD"
+              }[5m])
+            ) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+            team: starstalk
+          annotations:
+            summary: "High CPU usage in {{ $labels.namespace }} ({{ $value | printf \"%.2f\" }} cores)"
+            description: >
+              Namespace {{ $labels.namespace }} is consuming more than 0.8 CPU cores
+              for > 10 minutes.
+
+        - alert: StarstalkHighMemory
+          expr: |
+            sum by (namespace) (
+              container_memory_working_set_bytes{
+                namespace=~"starstalk|starstalk-dev",
+                container!="", container!="POD"
+              }
+            ) > 268435456
+          for: 10m
+          labels:
+            severity: warning
+            team: starstalk
+          annotations:
+            summary: "High memory in {{ $labels.namespace }} ({{ $value | humanize1024 }}B)"
+            description: >
+              Namespace {{ $labels.namespace }} is using more than 256Mi memory
+              for > 10 minutes. Check for memory leaks.
+
+        - alert: StarstalkPodOOMKilled
+          expr: |
+            kube_pod_container_status_last_terminated_reason{
+              namespace=~"starstalk|starstalk-dev",
+              reason="OOMKilled"
+            } == 1
+          for: 0m
+          labels:
+            severity: critical
+            team: starstalk
+          annotations:
+            summary: "Pod {{ $labels.pod }} was OOMKilled ({{ $labels.namespace }})"
+            description: >
+              Container {{ $labels.container }} in pod {{ $labels.pod }}
+              ({{ $labels.namespace }}) was killed due to out-of-memory.
+              Consider increasing memory limits.
+
+    # ── PostgreSQL (CloudNativePG) ────────────────────────────────────────────
+    - name: starstalk.postgresql
+      interval: 30s
+      rules:
+
+        - alert: StarstalkPostgreSQLDown
+          expr: |
+            up{job=~".*cnpg.*", namespace=~"starstalk|starstalk-dev"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: starstalk
+          annotations:
+            summary: "PostgreSQL instance down ({{ $labels.namespace }})"
+            description: >
+              CloudNativePG instance {{ $labels.pod }} in {{ $labels.namespace }}
+              is not scraped by Prometheus for > 2 minutes.
+
+        - alert: StarstalkPostgreSQLReplicationLag
+          expr: |
+            cnpg_collector_pg_replication_lag{namespace="starstalk"} > 30
+          for: 5m
+          labels:
+            severity: warning
+            team: starstalk
+          annotations:
+            summary: "PostgreSQL replication lag {{ $value | printf \"%.0f\" }}s (prod)"
+            description: >
+              The standby replica in the starstalk (prod) cluster is {{ $value }}s
+              behind the primary. Risk of data loss on failover.
+
+        - alert: StarstalkPostgreSQLHighConnections
+          expr: |
+            cnpg_collector_pg_stat_database_numbackends{
+              namespace="starstalk",
+              datname="starstalk"
+            } > 80
+          for: 5m
+          labels:
+            severity: warning
+            team: starstalk
+          annotations:
+            summary: "PostgreSQL high connection count: {{ $value | printf \"%.0f\" }}"
+            description: >
+              The starstalk database has {{ $value }} active connections.
+              Default max_connections is 100 — approaching limit.
+
+    # ── Kubernetes nodes ──────────────────────────────────────────────────────
+    - name: starstalk.nodes
+      interval: 60s
+      rules:
+
+        - alert: NodeHighCPU
+          expr: |
+            100 - (avg by (node) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+          for: 10m
+          labels:
+            severity: warning
+            team: infra
+          annotations:
+            summary: "Node {{ $labels.node }} CPU > 85%"
+            description: >
+              Node {{ $labels.node }} has been above 85% CPU for > 10 minutes.
+
+        - alert: NodeHighMemory
+          expr: |
+            (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+          for: 10m
+          labels:
+            severity: warning
+            team: infra
+          annotations:
+            summary: "Node {{ $labels.instance }} memory > 85%"
+            description: >
+              Node {{ $labels.instance }} has been above 85% memory utilisation
+              for > 10 minutes.
+
+        - alert: NodeDiskSpaceLow
+          expr: |
+            (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"}
+            / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}) * 100 < 20
+          for: 5m
+          labels:
+            severity: warning
+            team: infra
+          annotations:
+            summary: "Node {{ $labels.instance }} disk < 20% free"
+            description: >
+              Node {{ $labels.instance }} has less than 20% disk space available
+              on the root filesystem. Free space: {{ $value | printf \"%.1f\" }}%.
+
+        - alert: NodeDiskSpaceCritical
+          expr: |
+            (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"}
+            / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}) * 100 < 10
+          for: 2m
+          labels:
+            severity: critical
+            team: infra
+          annotations:
+            summary: "Node {{ $labels.instance }} disk < 10% free — CRITICAL"
+            description: >
+              Node {{ $labels.instance }} has less than 10% disk space. Pods may
+              be evicted. Free space: {{ $value | printf \"%.1f\" }}%.

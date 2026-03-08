@@ -32,6 +32,9 @@ grafana:
   ingress:
     enabled: true
     ingressClassName: traefik
+    annotations:
+      # Route on both HTTP (from CF Tunnel) and HTTPS entrypoints
+      traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     hosts:
       - grafana.starstalk.io
       - monitor.starstalk.io

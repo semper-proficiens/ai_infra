@@ -1,0 +1,166 @@
+# Starstalk Overview Dashboard
+# Auto-loaded by the grafana-sc-dashboard sidecar (watches ConfigMaps with grafana_dashboard="1").
+# Shows dev and prod environments side-by-side with pod status, CPU, memory, and restarts.
+#
+# Apply: kubectl apply -f k8s/monitoring/dashboards/starstalk-overview.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: starstalk-overview-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  starstalk-overview.json: |
+    {
+      "id": null,
+      "uid": "starstalk-overview",
+      "title": "Starstalk \u2014 Dev & Prod Overview",
+      "tags": ["starstalk"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "30s",
+      "time": {"from": "now-3h", "to": "now"},
+      "panels": [
+
+        {"type":"row","id":1,"title":"Production (starstalk)","collapsed":false,"gridPos":{"h":1,"w":24,"x":0,"y":0}},
+
+        {"id":2,"title":"Running Pods","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":0,"y":1},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none","textMode":"value_and_name"},
+          "fieldConfig":{"defaults":{"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"red"},{"value":1,"color":"green"}]},"mappings":[]}},
+          "targets":[{"expr":"count(kube_pod_status_phase{namespace=\"starstalk\",phase=\"Running\"}) or vector(0)","legendFormat":"running","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":3,"title":"Not Ready","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":4,"y":1},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+          "fieldConfig":{"defaults":{"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"green"},{"value":1,"color":"red"}]},"mappings":[]}},
+          "targets":[{"expr":"count(kube_pod_status_ready{namespace=\"starstalk\",condition=\"false\"}) or vector(0)","legendFormat":"not ready","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":4,"title":"Restarts (1h)","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":8,"y":1},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+          "fieldConfig":{"defaults":{"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"green"},{"value":1,"color":"yellow"},{"value":5,"color":"red"}]},"mappings":[]}},
+          "targets":[{"expr":"sum(increase(kube_pod_container_status_restarts_total{namespace=\"starstalk\"}[1h])) or vector(0)","legendFormat":"restarts","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":5,"title":"CPU (cores)","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":12,"y":1},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"area"},
+          "fieldConfig":{"defaults":{"decimals":3,"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"green"},{"value":0.4,"color":"yellow"},{"value":0.8,"color":"red"}]},"mappings":[]}},
+          "targets":[{"expr":"sum(rate(container_cpu_usage_seconds_total{namespace=\"starstalk\",container!=\"\",container!=\"POD\"}[5m]))","legendFormat":"cpu","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":6,"title":"Memory","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":16,"y":1},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"area"},
+          "fieldConfig":{"defaults":{"unit":"bytes","thresholds":{"mode":"absolute","steps":[{"value":null,"color":"green"},{"value":157286400,"color":"yellow"},{"value":251658240,"color":"red"}]},"mappings":[]}},
+          "targets":[{"expr":"sum(container_memory_working_set_bytes{namespace=\"starstalk\",container!=\"\",container!=\"POD\"})","legendFormat":"memory","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":7,"title":"Replicas (avail/desired)","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":20,"y":1},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none","textMode":"value_and_name"},
+          "fieldConfig":{"defaults":{"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"red"},{"value":1,"color":"green"}]},"mappings":[]}},
+          "targets":[
+            {"expr":"sum(kube_deployment_status_replicas_available{namespace=\"starstalk\"})","legendFormat":"available","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}},
+            {"expr":"sum(kube_deployment_spec_replicas{namespace=\"starstalk\"})","legendFormat":"desired","refId":"B","datasource":{"type":"prometheus","uid":"prometheus"}}
+          ]},
+
+        {"type":"row","id":8,"title":"Development (starstalk-dev)","collapsed":false,"gridPos":{"h":1,"w":24,"x":0,"y":5}},
+
+        {"id":9,"title":"Running Pods","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":0,"y":6},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none","textMode":"value_and_name"},
+          "fieldConfig":{"defaults":{"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"red"},{"value":1,"color":"green"}]},"mappings":[]}},
+          "targets":[{"expr":"count(kube_pod_status_phase{namespace=\"starstalk-dev\",phase=\"Running\"}) or vector(0)","legendFormat":"running","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":10,"title":"Not Ready","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":4,"y":6},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+          "fieldConfig":{"defaults":{"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"green"},{"value":1,"color":"red"}]},"mappings":[]}},
+          "targets":[{"expr":"count(kube_pod_status_ready{namespace=\"starstalk-dev\",condition=\"false\"}) or vector(0)","legendFormat":"not ready","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":11,"title":"Restarts (1h)","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":8,"y":6},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+          "fieldConfig":{"defaults":{"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"green"},{"value":1,"color":"yellow"},{"value":5,"color":"red"}]},"mappings":[]}},
+          "targets":[{"expr":"sum(increase(kube_pod_container_status_restarts_total{namespace=\"starstalk-dev\"}[1h])) or vector(0)","legendFormat":"restarts","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":12,"title":"CPU (cores)","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":12,"y":6},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"area"},
+          "fieldConfig":{"defaults":{"decimals":3,"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"green"},{"value":0.2,"color":"yellow"},{"value":0.4,"color":"red"}]},"mappings":[]}},
+          "targets":[{"expr":"sum(rate(container_cpu_usage_seconds_total{namespace=\"starstalk-dev\",container!=\"\",container!=\"POD\"}[5m]))","legendFormat":"cpu","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":13,"title":"Memory","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":16,"y":6},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"area"},
+          "fieldConfig":{"defaults":{"unit":"bytes","thresholds":{"mode":"absolute","steps":[{"value":null,"color":"green"},{"value":52428800,"color":"yellow"},{"value":104857600,"color":"red"}]},"mappings":[]}},
+          "targets":[{"expr":"sum(container_memory_working_set_bytes{namespace=\"starstalk-dev\",container!=\"\",container!=\"POD\"})","legendFormat":"memory","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":14,"title":"Replicas (avail/desired)","type":"stat",
+          "gridPos":{"h":4,"w":4,"x":20,"y":6},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none","textMode":"value_and_name"},
+          "fieldConfig":{"defaults":{"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"red"},{"value":1,"color":"green"}]},"mappings":[]}},
+          "targets":[
+            {"expr":"sum(kube_deployment_status_replicas_available{namespace=\"starstalk-dev\"})","legendFormat":"available","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}},
+            {"expr":"sum(kube_deployment_spec_replicas{namespace=\"starstalk-dev\"})","legendFormat":"desired","refId":"B","datasource":{"type":"prometheus","uid":"prometheus"}}
+          ]},
+
+        {"type":"row","id":15,"title":"Resource Trends","collapsed":false,"gridPos":{"h":1,"w":24,"x":0,"y":10}},
+
+        {"id":16,"title":"CPU Usage — Prod vs Dev","type":"timeseries",
+          "gridPos":{"h":8,"w":12,"x":0,"y":11},
+          "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"table","placement":"bottom","calcs":["lastNotNull","max"]}},
+          "fieldConfig":{"defaults":{"unit":"short","custom":{"lineWidth":2,"fillOpacity":10}}},
+          "targets":[
+            {"expr":"sum(rate(container_cpu_usage_seconds_total{namespace=\"starstalk\",container!=\"\",container!=\"POD\"}[5m]))","legendFormat":"prod","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}},
+            {"expr":"sum(rate(container_cpu_usage_seconds_total{namespace=\"starstalk-dev\",container!=\"\",container!=\"POD\"}[5m]))","legendFormat":"dev","refId":"B","datasource":{"type":"prometheus","uid":"prometheus"}}
+          ]},
+
+        {"id":17,"title":"Memory — Prod vs Dev","type":"timeseries",
+          "gridPos":{"h":8,"w":12,"x":12,"y":11},
+          "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"table","placement":"bottom","calcs":["lastNotNull","max"]}},
+          "fieldConfig":{"defaults":{"unit":"bytes","custom":{"lineWidth":2,"fillOpacity":10}}},
+          "targets":[
+            {"expr":"sum(container_memory_working_set_bytes{namespace=\"starstalk\",container!=\"\",container!=\"POD\"})","legendFormat":"prod","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}},
+            {"expr":"sum(container_memory_working_set_bytes{namespace=\"starstalk-dev\",container!=\"\",container!=\"POD\"})","legendFormat":"dev","refId":"B","datasource":{"type":"prometheus","uid":"prometheus"}}
+          ]},
+
+        {"id":18,"title":"Pod Restarts (rate per 5m)","type":"timeseries",
+          "gridPos":{"h":8,"w":12,"x":0,"y":19},
+          "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"table","placement":"bottom","calcs":["lastNotNull","sum"]}},
+          "fieldConfig":{"defaults":{"custom":{"lineWidth":2,"fillOpacity":10,"drawStyle":"bars"}}},
+          "targets":[{"expr":"sum by (pod,namespace) (increase(kube_pod_container_status_restarts_total{namespace=~\"starstalk|starstalk-dev\"}[5m]))","legendFormat":"{{namespace}}/{{pod}}","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":19,"title":"Pod Status","type":"table",
+          "gridPos":{"h":8,"w":12,"x":12,"y":19},
+          "options":{"sortBy":[{"displayName":"Namespace"},{"displayName":"Pod"}],"footer":{"show":false}},
+          "fieldConfig":{"defaults":{},"overrides":[
+            {"matcher":{"id":"byName","options":"Value #phase"},"properties":[{"id":"mappings","value":[{"type":"value","options":{"Running":{"text":"Running","color":"green","index":0},"Pending":{"text":"Pending","color":"yellow","index":1},"Failed":{"text":"Failed","color":"red","index":2}}}]},{"id":"custom.displayMode","value":"color-background"}]},
+            {"matcher":{"id":"byName","options":"Time"},"properties":[{"id":"custom.hidden","value":true}]}
+          ]},
+          "transformations":[{"id":"labelsToFields","options":{"valueLabel":"phase"}},{"id":"organize","options":{"excludeByName":{"Time":true,"__name__":true}}}],
+          "targets":[{"expr":"kube_pod_status_phase{namespace=~\"starstalk|starstalk-dev\",phase=~\"Running|Pending|Failed|Unknown\"}","legendFormat":"{{phase}}","refId":"A","instant":true,"datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"type":"row","id":20,"title":"PostgreSQL","collapsed":false,"gridPos":{"h":1,"w":24,"x":0,"y":27}},
+
+        {"id":21,"title":"DB Clusters Healthy","type":"stat",
+          "gridPos":{"h":4,"w":6,"x":0,"y":28},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+          "fieldConfig":{"defaults":{"thresholds":{"mode":"absolute","steps":[{"value":null,"color":"red"},{"value":1,"color":"green"}]},"mappings":[]}},
+          "targets":[{"expr":"count(up{job=~\".*cnpg.*\"} == 1) or vector(0)","legendFormat":"healthy","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":22,"title":"Replication Lag (prod)","type":"stat",
+          "gridPos":{"h":4,"w":6,"x":6,"y":28},
+          "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+          "fieldConfig":{"defaults":{"unit":"s","thresholds":{"mode":"absolute","steps":[{"value":null,"color":"green"},{"value":10,"color":"yellow"},{"value":30,"color":"red"}]},"mappings":[{"type":"special","options":{"match":"null","result":{"text":"N/A","color":"green"}}}]}},
+          "targets":[{"expr":"cnpg_collector_pg_replication_lag{namespace=\"starstalk\"}","legendFormat":"lag","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]},
+
+        {"id":23,"title":"DB Connections (prod)","type":"timeseries",
+          "gridPos":{"h":4,"w":12,"x":12,"y":28},
+          "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"bottom"}},
+          "fieldConfig":{"defaults":{"custom":{"lineWidth":2,"fillOpacity":10}}},
+          "targets":[{"expr":"cnpg_collector_pg_stat_database_numbackends{namespace=\"starstalk\",datname!~\"template.*|postgres\"}","legendFormat":"{{datname}}","refId":"A","datasource":{"type":"prometheus","uid":"prometheus"}}]}
+
+      ]
+    }
