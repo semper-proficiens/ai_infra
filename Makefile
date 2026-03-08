@@ -1,5 +1,6 @@
 .PHONY: help plan apply destroy bootstrap-k3s merge-kubeconfig \
-        status ssh logs seed-runner-env setup-runner
+        status ssh logs seed-runner-env setup-runner \
+        renew-teleport-bot setup-vault-dev
 
 TERRAFORM_DIR := terraform/environments/homelab
 TSH_PROXY     ?= teleport.starstalk.io
@@ -76,6 +77,19 @@ setup-runner:
 install-k8s-tools:
 	TSH_PROXY=$(TSH_PROXY) TSH_IDENTITY=$(TSH_IDENTITY) \
 		./scripts/run-on-node.sh starstalk-runner scripts/node/install-k8s-tools.sh
+
+## renew-teleport-bot: Re-join tbot after cert expiry  (TOKEN=<new-join-token>)
+renew-teleport-bot:
+	TOKEN=$(TOKEN) ./scripts/renew-teleport-bot.sh
+
+## setup-vault-dev: Copy prod Vault config → secret/starstalk-dev with ENVIRONMENT=dev (run on Vault VM)
+## setup-vault-dev: Usage: scp scripts/setup-vault-dev-path.sh root@192.168.0.74:/tmp/ && ssh root@192.168.0.74 bash /tmp/setup-vault-dev-path.sh
+setup-vault-dev:
+	@echo "Run on Vault VM (192.168.0.74) as root:"
+	@echo "  scp scripts/setup-vault-dev-path.sh root@192.168.0.74:/tmp/"
+	@echo "  ssh root@192.168.0.74 bash /tmp/setup-vault-dev-path.sh"
+	@echo ""
+	@echo "Then add VAULT_DEV_ROLE_ID + VAULT_DEV_SECRET_ID to ai_infra GitHub Secrets."
 
 ## install-build-tools: Install Go + Docker on the runner (enables self-hosted CI builds)
 install-build-tools:

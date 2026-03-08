@@ -56,12 +56,22 @@ jobs:
 
       - name: Refresh Vault credentials in starstalk-dev
         env:
-          VAULT_ROLE_ID:    ${{ secrets.VAULT_ROLE_ID }}
-          VAULT_SECRET_ID:  ${{ secrets.VAULT_SECRET_ID }}
+          # Dev AppRole (secret/starstalk-dev → ENVIRONMENT=dev, PORT=8080).
+          # If VAULT_DEV_ROLE_ID is not set, falls back to prod AppRole creds.
+          # Run scripts/setup-vault-dev-path.sh on Vault VM then add:
+          #   VAULT_DEV_ROLE_ID and VAULT_DEV_SECRET_ID to GitHub Secrets.
+          VAULT_ROLE_ID:       ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID:     ${{ secrets.VAULT_SECRET_ID }}
+          VAULT_DEV_ROLE_ID:   ${{ secrets.VAULT_DEV_ROLE_ID }}
+          VAULT_DEV_SECRET_ID: ${{ secrets.VAULT_DEV_SECRET_ID }}
         run: |
-          kubectl create secret generic starstalk-vault \
-            --from-literal=VAULT_ROLE_ID="${VAULT_ROLE_ID}" \
-            --from-literal=VAULT_SECRET_ID="${VAULT_SECRET_ID}" \
+          # Use dev-specific AppRole if available, otherwise use prod AppRole
+          DEV_ROLE_ID="${VAULT_DEV_ROLE_ID:-${VAULT_ROLE_ID}}"
+          DEV_SECRET_ID="${VAULT_DEV_SECRET_ID:-${VAULT_SECRET_ID}}"
+
+          kubectl create secret generic starstalk-vault-dev \
+            --from-literal=VAULT_ROLE_ID="${DEV_ROLE_ID}" \
+            --from-literal=VAULT_SECRET_ID="${DEV_SECRET_ID}" \
             --namespace starstalk-dev \
             --dry-run=client -o yaml | kubectl apply -f -
 

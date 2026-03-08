@@ -41,8 +41,14 @@ resources:
 # No anti-affinity for dev — fine to co-locate on any node
 affinity: {}
 
-# Override probes — Vault sets ENVIRONMENT=prod so app binds on 443 (HTTPS).
-# TODO: create a dev-specific Vault path with ENVIRONMENT=dev once Teleport is renewed.
+# NOTE: Until setup-vault-dev-path.sh is run on the Vault VM and
+# VAULT_DEV_ROLE_ID/VAULT_DEV_SECRET_ID are added to GitHub Secrets,
+# dev uses the same AppRole as prod (reads secret/starstalk → ENVIRONMENT=prod).
+# After Vault setup: service port will be reverted to 8080, probes to httpGet,
+# and secretEnv will switch to starstalk-vault-dev automatically via deploy workflow.
+
+# TEMPORARY: TCP probe on 443 while dev AppRole reads secret/starstalk (ENVIRONMENT=prod).
+# Reverts to httpGet on 8080 once dev AppRole reads secret/starstalk-dev.
 livenessProbe:
   httpGet: null
   tcpSocket:
@@ -62,16 +68,16 @@ env:
   PORT: "8080"
   ENVIRONMENT: "dev"
   INFRA: "k8s"
-  # DB_HOST points at the dev CloudNativePG service within starstalk-dev namespace.
-  # If Vault provides DB_HOST, this is overridden at runtime — that's fine.
   DB_HOST: "starstalk-pg-dev-rw.starstalk-dev.svc.cluster.local"
   DB_PORT: "5432"
 
-# Vault creds from dev-specific k8s Secret
+# Vault creds — deploy workflow creates this secret from GitHub Secrets.
+# Uses VAULT_DEV_ROLE_ID/VAULT_DEV_SECRET_ID if set (dev AppRole, reads secret/starstalk-dev).
+# Falls back to VAULT_ROLE_ID/VAULT_SECRET_ID (prod AppRole, reads secret/starstalk).
 secretEnv:
   VAULT_ROLE_ID:
-    secretName: starstalk-vault
+    secretName: starstalk-vault-dev
     key: VAULT_ROLE_ID
   VAULT_SECRET_ID:
-    secretName: starstalk-vault
+    secretName: starstalk-vault-dev
     key: VAULT_SECRET_ID
