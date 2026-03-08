@@ -28,6 +28,21 @@ grafana:
       header_property: email
       auto_sign_up: true
       default_role: Viewer
+    # SMTP — credentials injected from Secret/grafana-smtp-credentials
+    # via extraSecretMounts below. Password read from env var GF_SMTP_PASSWORD.
+    smtp:
+      enabled: true
+      host: smtp.gmail.com:587
+      user: ${GF_SMTP_USER}
+      password: ${GF_SMTP_PASSWORD}
+      from_address: ${GF_SMTP_USER}
+      from_name: Starstalk Alerts
+      startTLS_policy: MandatoryStartTLS
+
+  # Mount smtp credentials secret as env vars.
+  # Secret/grafana-smtp-credentials must exist before helm upgrade:
+  #   make setup-alert-email
+  envFromSecret: grafana-smtp-credentials
 
   ingress:
     enabled: true
@@ -91,7 +106,12 @@ prometheus:
 
 alertmanager:
   enabled: true
+  # Full Alertmanager config (routing + receivers with real email) lives in a
+  # k8s Secret to keep PII and SMTP credentials out of git.
+  # Secret/alertmanager-config-email must exist before helm upgrade:
+  #   make setup-alert-email
   alertmanagerSpec:
+    configSecret: alertmanager-config-email
     storage:
       volumeClaimTemplate:
         spec:

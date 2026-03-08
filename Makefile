@@ -1,7 +1,7 @@
 .PHONY: help plan apply destroy bootstrap-k3s merge-kubeconfig \
         status ssh logs seed-runner-env setup-runner \
         renew-teleport-bot setup-vault-dev \
-        apply-monitoring create-grafana-sa
+        apply-monitoring create-grafana-sa setup-alert-email
 
 TERRAFORM_DIR := terraform/environments/homelab
 TSH_PROXY     ?= teleport.starstalk.io
@@ -152,6 +152,10 @@ helm-diff-dev:
 apply-monitoring:
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/monitoring/dashboards/
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/monitoring/alerts/
+
+## setup-alert-email: Create k8s Secrets for Alertmanager + Grafana SMTP (reads from .alert-creds)
+setup-alert-email:
+	KUBECONFIG=$(KUBECONFIG) ./scripts/setup-alert-email.sh
 
 ## create-grafana-sa: Create Grafana automation service account + store token as k8s secret
 create-grafana-sa:

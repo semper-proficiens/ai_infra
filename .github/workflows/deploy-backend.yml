@@ -146,7 +146,7 @@ jobs:
     runs-on: [self-hosted, proxmox]
     environment:
       name: dev
-      url: https://api-dev-v2.starstalk.io
+      url: https://api-dev.starstalk.io/v2/healthcheck
 
     steps:
       - name: Checkout ai_infra (Helm charts only — no private code)
@@ -195,7 +195,7 @@ jobs:
     runs-on: [self-hosted, proxmox]
     environment:
       name: prod
-      url: https://api-v2.starstalk.io
+      url: https://api.starstalk.io/v2/healthcheck
 
     steps:
       - name: Checkout ai_infra (Helm charts only — no private code)

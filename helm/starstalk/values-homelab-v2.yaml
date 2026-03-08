@@ -4,7 +4,8 @@
 # Triggered by: deploy-prod-v2 dispatch from starstalk repo
 #
 # v2 binary binds on port 8082 (HTTP, no TLS) — Traefik handles TLS.
-# Ingress: api-v2.starstalk.io → this service.
+# Ingress: api.starstalk.io/v2/* → this service.
+# Traefik routes /v2/* here (more specific) and /* to v1 Go (catch-all).
 
 replicaCount: 2
 
@@ -23,9 +24,9 @@ ingress:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
   hosts:
-    - host: api-v2.starstalk.io
+    - host: api.starstalk.io
       paths:
-        - path: /
+        - path: /v2
           pathType: Prefix
 
 autoscaling:
