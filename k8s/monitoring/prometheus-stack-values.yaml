@@ -143,6 +143,7 @@ defaultRules:
     node: true
     # k3s runs these components as embedded processes — no separate metrics endpoints.
     # Disabling prevents persistent critical spam from the default rules.
-    kubeControllerManager: false   # KubeControllerManagerDown: not scraped in k3s
-    kubeScheduler: false           # KubeSchedulerDown: not scraped in k3s
-    kubeProxy: false               # KubeProxyDown: k3s uses kube-router, not kube-proxy
+    kubeControllerManager: false    # KubeControllerManagerDown: not scraped in k3s
+    kubeSchedulerAlerting: false    # KubeSchedulerDown: not scraped in k3s
+    kubeSchedulerRecording: false   # Scheduler recording rules: no scrape target in k3s
+    kubeProxy: false                # KubeProxyDown: k3s uses kube-router, not kube-proxy
