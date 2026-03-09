@@ -22,6 +22,14 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    - host: starstalk.io
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: www.starstalk.io
+      paths:
+        - path: /
+          pathType: Prefix
 
 autoscaling:
   enabled: true
