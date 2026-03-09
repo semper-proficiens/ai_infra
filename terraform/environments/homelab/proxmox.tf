@@ -5,9 +5,9 @@ module "runner" {
 
   vmid        = 110
   hostname    = "starstalk-runner"
-  cores       = 2
-  memory_mb   = 2048
-  disk_gb     = 20
+  cores       = 4
+  memory_mb   = 16384
+  disk_gb     = 40
   ip_cidr     = "192.168.0.77/24"
   gateway     = "192.168.0.1"
   proxmox_node = var.proxmox_node
