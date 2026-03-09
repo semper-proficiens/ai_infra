@@ -87,6 +87,10 @@ grafana:
         gnetId: 13659    # Kubernetes / Compute Resources / Namespace (Workloads)
         revision: 3
         datasource: Prometheus
+      loki-logs:
+        gnetId: 13639    # Logs / App — Loki log volume + error rate by namespace/pod
+        revision: 2
+        datasource: Loki
 
 prometheus:
   prometheusSpec:

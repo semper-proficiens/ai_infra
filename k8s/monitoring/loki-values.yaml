@@ -1,0 +1,68 @@
+# Grafana Loki — centralized log aggregation for all k3s pod logs
+#
+# Deployment mode: SingleBinary (monolithic) — right-sized for homelab.
+# All components (ingester, querier, compactor) in one pod.
+# Logs retained 30 days; PVC 10Gi on local-path (k3s default).
+#
+# Install/upgrade: make setup-loki
+# Query logs: grafana.starstalk.io → Explore → Loki
+# Example LogQL:
+#   {namespace="starstalk"}                         — all prod pod logs
+#   {namespace="starstalk-dev"}                     — all dev pod logs
+#   {namespace="starstalk",container="starstalk"} |= "ERROR"  — prod errors
+#   {pod=~"starstalk-.*"} | json | level="ERROR"   — structured error logs
+#   rate({namespace="starstalk"}[5m])              — log ingestion rate
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  # 30-day retention — compactor deletes chunks older than 720h
+  limits_config:
+    retention_period: 720h
+
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Disable unused distributed components
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
