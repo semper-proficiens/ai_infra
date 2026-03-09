@@ -88,6 +88,9 @@ jobs:
             --set "image.tag=${{ env.IMAGE_TAG }}" \
             -f helm/starstalk/values-dev.yaml \
             --wait --timeout 3m
+          # Force pod restart so the latest :dev image is always pulled.
+          # Helm won't restart pods when the image tag is static (dev tag never changes).
+          kubectl rollout restart deployment/starstalk-dev -n starstalk-dev
 
       - name: Verify rollout
         run: |
@@ -181,6 +184,8 @@ jobs:
             --set "image.tag=${{ env.IMAGE_TAG }}" \
             -f helm/starstalk/values-dev-v2.yaml \
             --wait --timeout 3m
+          # Force pod restart so the latest :dev image is always pulled.
+          kubectl rollout restart deployment/starstalk-dev-v2 -n starstalk-dev
 
       - name: Verify rollout
         run: |
