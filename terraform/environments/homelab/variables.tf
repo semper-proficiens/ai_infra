@@ -57,4 +57,21 @@ variable "worker_count" {
   default     = 1
 }
 
-# ssj2 variables reserved for future use
+# ssj2
+variable "proxmox_url_ssj2" {
+  description = "Proxmox API endpoint for ssj2, e.g. https://192.168.0.84:8006"
+  type        = string
+  default     = "https://192.168.0.84:8006"
+}
+
+variable "proxmox_api_token_ssj2" {
+  description = "Proxmox API token for ssj2, format: user@realm!token-id=secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "proxmox_node_ssj2" {
+  description = "Proxmox node name for ssj2"
+  type        = string
+  default     = "test2"
+}

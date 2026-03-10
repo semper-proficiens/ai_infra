@@ -20,3 +20,16 @@ provider "proxmox" {
     username = "root"
   }
 }
+
+# ssj2 provider alias (192.168.0.84)
+provider "proxmox" {
+  alias     = "ssj2"
+  endpoint  = var.proxmox_url_ssj2
+  api_token = var.proxmox_api_token_ssj2
+  insecure  = true
+
+  ssh {
+    agent    = true
+    username = "root"
+  }
+}

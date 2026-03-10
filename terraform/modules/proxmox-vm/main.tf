@@ -40,6 +40,8 @@ resource "proxmox_virtual_environment_vm" "this" {
   }
 
   initialization {
+    datastore_id = var.cloudinit_storage != "" ? var.cloudinit_storage : var.storage
+
     ip_config {
       ipv4 {
         address = var.ip_cidr
