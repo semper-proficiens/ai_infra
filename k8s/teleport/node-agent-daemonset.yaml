@@ -28,8 +28,7 @@ data:
     teleport:
       nodename: NODE_NAME_PLACEHOLDER
       data_dir: /var/lib/teleport
-      auth_servers:
-        - teleport.starstalk.io:443
+      proxy_server: teleport.starstalk.io:443
       join_params:
         method: kubernetes
         token_name: k3s-node-agent
@@ -84,21 +83,26 @@ spec:
               mountPath: /config
       containers:
         - name: teleport-node
-          image: public.ecr.aws/gravitational/teleport-distroless:17
+          image: public.ecr.aws/gravitational/teleport-distroless:15.5.4
           args:
-            - start
-            - --config=/config/teleport.yaml
-            - --roles=node
+            - --config=/etc/teleport/teleport.yaml
           env:
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # Point teleport at projected SA token (audience=Teleport cluster name)
+            # so static_jwks audience validation passes.
+            - name: KUBERNETES_TOKEN_PATH
+              value: /var/run/secrets/tokens/node-token
           volumeMounts:
             - name: config
               mountPath: /etc/teleport
             - name: data
               mountPath: /var/lib/teleport
+            - name: node-token
+              mountPath: /var/run/secrets/tokens
+              readOnly: true
           resources:
             requests:
               cpu: 10m
@@ -115,3 +119,10 @@ spec:
           hostPath:
             path: /var/lib/teleport-node
             type: DirectoryOrCreate
+        - name: node-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: node-token
+                  expirationSeconds: 600
+                  audience: ssj2-erniepy-Standard-PC-i440FX-PIIX-1996
