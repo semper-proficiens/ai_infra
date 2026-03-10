@@ -49,6 +49,12 @@ variable "storage" {
   default     = "local-lvm"
 }
 
+variable "cloudinit_storage" {
+  description = "Storage pool for cloud-init drive (defaults to same as storage)"
+  type        = string
+  default     = ""
+}
+
 variable "bridge" {
   description = "Network bridge"
   type        = string

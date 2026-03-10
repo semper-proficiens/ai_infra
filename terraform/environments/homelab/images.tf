@@ -11,3 +11,11 @@ data "proxmox_virtual_environment_file" "ubuntu_24_04" {
   node_name    = var.proxmox_node
   file_name    = "noble-server-cloudimg-amd64.img"
 }
+
+data "proxmox_virtual_environment_file" "ubuntu_24_04_ssj2" {
+  provider     = proxmox.ssj2
+  content_type = "iso"
+  datastore_id = "local"
+  node_name    = var.proxmox_node_ssj2
+  file_name    = "noble-server-cloudimg-amd64.img"
+}

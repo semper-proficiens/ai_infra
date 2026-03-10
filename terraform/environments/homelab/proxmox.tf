@@ -77,4 +77,34 @@ module "k3s_workers" {
   role                 = "k3s-worker"
 }
 
-# ssj2 worker will be added here once ssj2 API token is configured
+# ── k3s worker VM on ssj2 (cross-host HA) ────────────────────────────────────
+
+module "k3s_worker_ssj2" {
+  source = "../../modules/proxmox-vm"
+
+  providers = {
+    proxmox = proxmox.ssj2
+  }
+
+  vmid        = 122
+  hostname    = "k3s-worker-1"
+  cores       = 2
+  memory_mb   = 4096
+  disk_gb     = 30
+  ip_cidr     = "192.168.0.82/24"
+  gateway     = "192.168.0.1"
+  proxmox_node = var.proxmox_node_ssj2
+  # local-lvm thin pool on ssj2 is at 94% capacity — use local dir storage
+  # (qcow2 sparse format, 34GB free on /var/lib/vz).
+  storage          = "local"
+  cloudinit_storage = "local"
+  bridge      = "vmbr0"
+
+  os_image_id    = data.proxmox_virtual_environment_file.ubuntu_24_04_ssj2.id
+  ssh_public_key = var.ssh_public_key
+
+  teleport_join_token  = var.vm_join_token
+  teleport_auth_server = var.teleport_auth_server
+  teleport_ca_pin      = var.teleport_ca_pin
+  role                 = "k3s-worker"
+}
