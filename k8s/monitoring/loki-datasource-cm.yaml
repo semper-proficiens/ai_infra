@@ -1,0 +1,29 @@
+# Grafana datasource ConfigMap — auto-provisioned by the grafana-sc-datasources sidecar.
+# The sidecar watches for ConfigMaps with label grafana_datasource: "1" and reloads
+# Grafana's datasource config without a pod restart.
+#
+# Applied by: make apply-monitoring  (or: make setup-loki)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-grafana-datasource
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  loki-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki-gateway.monitoring.svc.cluster.local
+        access: proxy
+        isDefault: false
+        jsonData:
+          maxLines: 5000
+          # Derived fields let you jump from a log line directly to a Prometheus trace
+          derivedFields:
+            - name: namespace
+              matcherRegex: '"namespace":"([^"]+)"'
+              url: ''

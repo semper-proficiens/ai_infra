@@ -1,7 +1,9 @@
 .PHONY: help plan apply destroy bootstrap-k3s merge-kubeconfig \
         status ssh logs seed-runner-env setup-runner \
         renew-teleport-bot setup-vault-dev \
-        apply-monitoring create-grafana-sa setup-alert-email
+        apply-monitoring create-grafana-sa setup-alert-email \
+        setup-loki upgrade-loki \
+        setup-minio minio-status minio-console
 
 TERRAFORM_DIR := terraform/environments/homelab
 TSH_PROXY     ?= teleport.starstalk.io
@@ -148,10 +150,28 @@ helm-diff-dev:
 
 # ── Monitoring ────────────────────────────────────────────────────────────────
 
-## apply-monitoring: Apply dashboards + alert rules (idempotent)
+## setup-loki: Install or upgrade Loki + Promtail (centralized log aggregation)
+setup-loki: upgrade-loki apply-monitoring
+
+## upgrade-loki: Helm upgrade Loki + Promtail with values from k8s/monitoring/loki-values.yaml
+upgrade-loki:
+	helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
+	helm repo update grafana
+	KUBECONFIG=$(KUBECONFIG) helm upgrade --install loki grafana/loki \
+		--namespace monitoring \
+		-f k8s/monitoring/loki-values.yaml \
+		--wait --timeout=5m
+	KUBECONFIG=$(KUBECONFIG) helm upgrade --install promtail grafana/promtail \
+		--namespace monitoring \
+		-f k8s/monitoring/promtail-values.yaml \
+		--wait --timeout=3m
+	@echo "Loki + Promtail upgraded. Query logs at grafana.starstalk.io → Explore → Loki"
+
+## apply-monitoring: Apply dashboards + alert rules + Loki datasource (idempotent)
 apply-monitoring:
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/monitoring/dashboards/
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/monitoring/alerts/
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/monitoring/loki-datasource-cm.yaml
 
 ## setup-alert-email: Create k8s Secrets for Alertmanager + Grafana SMTP (reads from .alert-creds)
 setup-alert-email:
@@ -172,3 +192,18 @@ install-tbot-sync-timer:
 ## deploy-tbot-k8s: Deploy tbot inside k3s (kubernetes join method — no token ever needed)
 deploy-tbot-k8s:
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/teleport/
+
+# ── MinIO ─────────────────────────────────────────────────────────────────────
+
+## setup-minio: Deploy distributed MinIO to k3s (4 pods, erasure coding EC:2)
+setup-minio:
+	KUBECONFIG=$(KUBECONFIG) ./scripts/setup-minio.sh
+
+## minio-status: Show MinIO pod and StatefulSet status
+minio-status:
+	KUBECONFIG=$(KUBECONFIG) kubectl get statefulset,pods -n minio -l app.kubernetes.io/name=minio
+
+## minio-console: Port-forward MinIO console to localhost:9001
+minio-console:
+	@echo "Opening MinIO console at http://localhost:9001 (Ctrl-C to stop)"
+	KUBECONFIG=$(KUBECONFIG) kubectl port-forward svc/minio -n minio 9001:9001

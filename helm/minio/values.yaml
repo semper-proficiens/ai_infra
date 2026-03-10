@@ -1,0 +1,61 @@
+# MinIO — distributed mode (4 pods, erasure coding EC:2)
+#
+# Topology: 4 StatefulSet pods spread across k3s-worker-0 (ssj1) and
+# k3s-worker-1 (ssj2) via pod anti-affinity (2 per node).
+#
+# Erasure set: 4 drives, 2 data + 2 parity.
+# Fault tolerance: survives loss of any 2 drives.
+# If one worker node goes down (2 drives lost), MinIO enters read-only mode —
+# data is preserved and reads continue; writes resume when the node recovers.
+#
+# Effective usable storage: 2 × 8Gi = 16Gi (50% of raw 32Gi).
+# Disk pressure per worker: 2 × 8Gi PVCs (local-path, thin-provisioned on local-lvm).
+#
+# In-cluster S3 endpoint: http://minio.minio.svc.cluster.local:9000
+# Console:               http://minio.minio.svc.cluster.local:9001
+
+mode: distributed
+replicaCount: 4
+
+auth:
+  # Credentials injected from minio-credentials secret (created by setup-minio.sh).
+  # Keys: root-user, root-password.
+  existingSecret: minio-credentials
+
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 8Gi
+
+# Spread pods across k3s workers — 2 pods per node.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: minio
+          topologyKey: kubernetes.io/hostname
+
+service:
+  type: ClusterIP
+  ports:
+    api: 9000
+    console: 9001
+
+ingress:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Disable Prometheus ServiceMonitor (no PodMonitor CRD in this cluster yet).
+metrics:
+  serviceMonitor:
+    enabled: false

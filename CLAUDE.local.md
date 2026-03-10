@@ -61,18 +61,29 @@ Multiple Claude Code sessions may run in parallel. Follow all three tiers to pre
 ### ssj2 — second Proxmox (192.168.0.84)
 - API: https://192.168.0.84:8006
 - Proxmox token: automation@pve!claude-code (secret in .proxmox-creds as PROXMOX_TOKEN_SSJ2)
-- Node name: pve (confirm in ssj2 web UI if different)
+- Node name: **test2** (NOT pve — confirmed via API 2026-03-09)
 - Create token: Datacenter → Permissions → API Tokens → Add → grant same role as ssj1
 
 ### VMs / LXCs (all managed by Terraform except legacy VMs)
 | Hostname | VMID | IP | Host | Role | Terraform |
 |---|---|---|---|---|---|
-| starstalk-runner | 110 | 192.168.0.77 | ssj1 | GitHub Actions runner | yes (import) |
+| starstalk-runner | 110 | 192.168.0.77 | ssj1 | GitHub Actions runner [self-hosted, proxmox] | yes (import) |
 | k3s-control | 120 | 192.168.0.80 | ssj1 | k3s control plane | yes |
 | k3s-worker-0 | 121 | 192.168.0.81 | ssj1 | k3s worker | yes |
 | k3s-worker-1 | 122 | 192.168.0.82 | ssj2 | k3s worker (cross-host HA) | yes |
-| starstalk-goapp | - | 192.168.0.98 | ssj1 | legacy backend VM → retiring | no |
-| starstalk-postgres | - | 192.168.0.173 | ssj1 | legacy DB VM → retiring | no |
+| agent-runner | 130 | 192.168.0.90 | ssj2 | Bug-fix agent runner [self-hosted, agent] | no (manual) |
+| starstalk-goapp | - | 192.168.0.98 | ssj1 | legacy backend VM → RETIRED 2026-03-08 | no |
+| starstalk-postgres | - | 192.168.0.173 | ssj1 | legacy DB VM → RETIRED 2026-03-08 | no |
+
+### agent-runner LXC (VMID 130, ssj2)
+- 16 cores, 32GB RAM, 100GB disk, Ubuntu 24.04, unprivileged + nesting=1
+- Tools: go 1.23 at /usr/local/bin/go, gh, rg, kubectl, helm, docker
+- github-runner user (uid 1000, docker group)
+- Runner service: actions.runner.semper-proficiens-starstalk.agent-runner-ssj2
+- Kubeconfig: /home/github-runner/.kube/config (k3s 192.168.0.80:6443)
+- Memory store: /home/github-runner/bug-fix-memory.json (also synced to git orphan branch bug-agent-memory)
+- **IMPORTANT**: ssj2 node name is test2 — use /nodes/test2/lxc/130 in Proxmox API calls
+- Disk corruption happened once (2026-03-09) — e2fsck -fy fixed it; Go had to be reinstalled after
 
 ### Default LXC OS template
 local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst
@@ -153,6 +164,13 @@ The runner LXC has `nesting=true` (Terraform) enabling Docker. Go + Docker insta
 13. ✅ Retire old VMs — COMPLETE (2026-03-08):
     - starstalk-goapp (LXC VMID 106): service stopped, LXC destroyed from Proxmox
     - starstalk-postgres (LXC VMID 104): postgresql stopped, LXC destroyed from Proxmox
+14. ✅ Centralized logging — COMPLETE (2026-03-09):
+    - Grafana Loki + Promtail deployed in monitoring namespace (no new VM needed)
+    - Loki: SingleBinary, 10Gi PVC (local-path), 30-day retention
+    - Promtail: DaemonSet (one pod per node) ships ALL pod logs from ALL namespaces
+    - Grafana datasource auto-provisioned via ConfigMap (loki-grafana-datasource)
+    - Run `make setup-loki` to install or upgrade
+    - See "Log Retrieval" runbook below for query examples
     - tbot fixed via k3s kubernetes join method (see tbot-deployment.yaml)
 14. (Later) Add ssj2 Proxmox token → add k3s-worker-1 on ssj2 for cross-host HA
 
@@ -162,11 +180,54 @@ The runner LXC has `nesting=true` (Terraform) enabling Docker. Go + Docker insta
 - ✅ **Teleport certs**: FIXED — tbot now runs in k3s with kubernetes join method (k8s/teleport/). Auto-renews via identity-sync sidecar → tbot-sync systemd timer on WSL2.
 - ✅ **Legacy VM retirement**: DONE (2026-03-08) — starstalk-goapp (VMID 106) and starstalk-postgres (VMID 104) stopped and destroyed from Proxmox.
 - **Helm health probe**: TCP probe on 443 is a workaround while dev uses prod Vault path. Once dev AppRole reads `secret/starstalk-dev`, app will bind 8080 (HTTP) and probes should switch to httpGet on /health:8080.
-- **k3s-control RAM**: Bumped 2GB→4GB in Terraform (2026-03-08). Terraform apply in progress — VM restart required to apply. Monitor NodeHighMemory alert.
-- **ai_infra runner**: proxmox-ai-infra-runner registered and running in /home/github-runner-ai-infra on starstalk-runner LXC. deploy-prod jobs need nubesFilius approval gate.
-- **starstalk backend.yml**: ios.yml dispatch fixed (--ref dev → --ref main). PR #9 open.
+- ✅ **k3s-control RAM**: Bumped 2GB→4GB (2026-03-08). Applied via Proxmox API + reboot. NodeHighMemory alert cleared.
+- ✅ **Prod deploy gate removed**: nubesFilius approval gate removed from prod environment (2026-03-08). Deploys now fully automated.
+- ✅ **ai_infra runner**: proxmox-ai-infra-runner running in /home/github-runner-ai-infra on starstalk-runner LXC. If it loses config (.runner missing), reconfigure with `gh api repos/semper-proficiens/ai_infra/actions/runners/registration-token --method POST --jq .token` then `su -s /bin/bash github-runner -c './config.sh ... --replace'`.
+- ✅ **starstalk backend.yml**: ios.yml dispatch fixed (--ref dev → --ref main). Merged via PR #9.
+- ✅ **starstalk ios.yml**: runner fixed macos-26 → macos-15. Merged via PR #10.
+- **tbot identity**: tbot v15 uses key+key-cert.pub (new format); tsh uses identity file (old format). Fix: `KUBECONFIG=./kubeconfig ./scripts/sync-tbot-identity.sh` (pulls from k8s tbot-identity Secret). tbot-sync.timer runs every 30min automatically.
+- **Vault dev / helm probe**: dev still uses TCP probe on 443 (workaround). Once dev AppRole is fully activated, switch values-dev.yaml service.port→8080, probes→httpGet /health:8080.
 
 ### Operational Runbooks
+
+#### Log Retrieval (Grafana Loki)
+Logs for all k3s pods are shipped by Promtail → stored in Loki → queryable in Grafana.
+
+**Access:** https://grafana.starstalk.io → Explore → select "Loki" datasource
+
+**Common LogQL queries:**
+```logql
+# All prod pod logs (last hour default)
+{namespace="starstalk"}
+
+# All dev pod logs
+{namespace="starstalk-dev"}
+
+# Prod error logs only
+{namespace="starstalk", container="starstalk"} |= "ERROR"
+
+# Structured JSON error logs
+{namespace="starstalk"} | json | level="ERROR"
+
+# Logs for a specific pod
+{pod="starstalk-6b86f96b6f-9phv5"}
+
+# Log ingestion rate by namespace
+sum(rate({namespace=~"starstalk.*"}[5m])) by (namespace)
+
+# Search for a specific message
+{namespace="starstalk"} |= "circle_user_id"
+```
+
+**Loki infra details:**
+- Helm release: `loki` in `monitoring` namespace
+- Values file: `k8s/monitoring/loki-values.yaml`
+- Retention: 30 days (compactor runs nightly)
+- PVC: `storage-loki-0`, 10Gi, local-path
+- Gateway: `http://loki-gateway.monitoring.svc.cluster.local`
+- Promtail DaemonSet: `promtail` in `monitoring` namespace (one pod per node)
+
+**Install/upgrade:** `make setup-loki`
 
 #### Teleport cert renewal (run when `tsh` returns "cert has expired")
 ```bash
@@ -204,7 +265,7 @@ ssh root@192.168.0.74 bash /tmp/setup-vault-dev-path.sh
 gh workflow run deploy-backend.yml --repo semper-proficiens/ai_infra \
   -f environment=dev -f image_tag=dev
 
-# Trigger prod deploy (requires nubesFilius approval in GitHub UI):
+# Trigger prod deploy (no approval gate — fully automated as of 2026-03-08):
 gh workflow run deploy-backend.yml --repo semper-proficiens/ai_infra \
   -f environment=prod -f image_tag=<semver-tag>
 ```
