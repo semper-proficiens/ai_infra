@@ -1,0 +1,128 @@
+---
+# ServiceAccount for the cert-sync job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-cert-sync
+  namespace: vault
+---
+# Allow the job to read the vault-tls Secret
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vault-cert-sync
+  namespace: vault
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["vault-tls"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vault-cert-sync
+  namespace: vault
+subjects:
+  - kind: ServiceAccount
+    name: vault-cert-sync
+    namespace: vault
+roleRef:
+  kind: Role
+  name: vault-cert-sync
+  apiGroup: rbac.authorization.k8s.io
+---
+# CronJob: daily at 03:00 UTC — reads vault-tls Secret, compares fingerprint
+# with live cert on Vault VM, and syncs if changed.
+# Uses tsh (Teleport) via the identity mounted from the tbot-identity Secret.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vault-cert-sync
+  namespace: vault
+spec:
+  schedule: "0 3 * * *"   # daily at 03:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: vault-cert-sync
+          restartPolicy: OnFailure
+          volumes:
+            - name: tbot-identity
+              secret:
+                secretName: tbot-identity   # maintained by tbot-sync in teleport ns
+                optional: false
+          containers:
+            - name: sync
+              image: alpine:3.21
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  apk add --no-cache curl openssl kubectl bash 2>/dev/null
+
+                  # Download tsh binary
+                  TSH_VER="17.0.4"
+                  curl -fsSL "https://get.gravitational.com/teleport-v${TSH_VER}-linux-amd64-bin.tar.gz" \
+                    | tar -xzf - -C /usr/local/bin --strip-components=1 teleport/tsh 2>/dev/null \
+                    || curl -fsSL "https://cdn.teleport.dev/teleport-v${TSH_VER}-linux-amd64-bin.tar.gz" \
+                       | tar -xzf - -C /usr/local/bin --strip-components=1 teleport/tsh
+
+                  # Read new cert from k8s Secret
+                  NEW_CERT=$(kubectl get secret vault-tls -n vault -o jsonpath='{.data.tls\.crt}' | base64 -d)
+                  NEW_KEY=$(kubectl get secret vault-tls -n vault -o jsonpath='{.data.tls\.key}' | base64 -d)
+                  NEW_FP=$(echo "$NEW_CERT" | openssl x509 -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
+                  echo "New cert fingerprint: $NEW_FP"
+
+                  # Get current cert fingerprint from Vault VM
+                  LIVE_FP=$(tsh ssh \
+                    --proxy=teleport.starstalk.io:443 \
+                    --identity=/tbot-identity/identity \
+                    root@starstalk-hc-vault \
+                    "openssl x509 -noout -fingerprint -sha256 -in /opt/vault/tls/tls.crt 2>/dev/null | cut -d= -f2" 2>/dev/null || echo "unknown")
+                  echo "Live cert fingerprint: $LIVE_FP"
+
+                  if [ "$NEW_FP" = "$LIVE_FP" ]; then
+                    echo "Cert unchanged — nothing to do"
+                    exit 0
+                  fi
+
+                  echo "Cert changed — syncing to Vault VM"
+
+                  # Write cert and key to Vault VM via tsh ssh
+                  echo "$NEW_CERT" | tsh ssh \
+                    --proxy=teleport.starstalk.io:443 \
+                    --identity=/tbot-identity/identity \
+                    root@starstalk-hc-vault \
+                    "cat > /opt/vault/tls/tls.crt && chmod 640 /opt/vault/tls/tls.crt"
+
+                  echo "$NEW_KEY" | tsh ssh \
+                    --proxy=teleport.starstalk.io:443 \
+                    --identity=/tbot-identity/identity \
+                    root@starstalk-hc-vault \
+                    "cat > /opt/vault/tls/tls.key && chmod 640 /opt/vault/tls/tls.key"
+
+                  # Reload Vault to pick up new cert (graceful, no downtime)
+                  tsh ssh \
+                    --proxy=teleport.starstalk.io:443 \
+                    --identity=/tbot-identity/identity \
+                    root@starstalk-hc-vault \
+                    "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=\$(cat /root/.vault-token) vault operator reload -tls-skip-verify && echo 'Vault reloaded'"
+
+                  echo "Vault TLS cert sync complete"
+              volumeMounts:
+                - name: tbot-identity
+                  mountPath: /tbot-identity
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi

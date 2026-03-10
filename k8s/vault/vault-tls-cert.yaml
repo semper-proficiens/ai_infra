@@ -1,0 +1,31 @@
+---
+# Namespace for vault-related k8s resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vault
+---
+# Certificate for Vault's own TLS, issued by the internal CA via cert-manager.
+# cert-manager auto-renews when < 1/3 of validity remains (i.e. ~20 days for 90d cert).
+# The resulting Secret (vault-tls) is read by the vault-cert-sync CronJob and
+# pushed to the Vault VM at /opt/vault/tls/ via Teleport SSH.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-tls
+  namespace: vault
+spec:
+  secretName: vault-tls
+  duration: 2160h      # 90 days
+  renewBefore: 720h    # renew 30 days before expiry
+  commonName: starstalk-hc-vault
+  dnsNames:
+    - starstalk-hc-vault
+    - starstalk-hc-vault.starstalk.internal
+    - vault.starstalk.internal
+  ipAddresses:
+    - 192.168.0.74
+  issuerRef:
+    name: vault-pki
+    kind: ClusterIssuer
+    group: cert-manager.io

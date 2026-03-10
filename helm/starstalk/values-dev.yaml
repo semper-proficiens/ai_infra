@@ -10,16 +10,14 @@ image:
 
 service:
   type: ClusterIP
-  port: 443
-  targetPort: 443
+  port: 8080
+  targetPort: 8080
 
 ingress:
   enabled: true
   className: traefik
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-    # Backend serves HTTPS on 443 — tell Traefik to connect via HTTPS
-    traefik.ingress.kubernetes.io/service.serversscheme: https
   hosts:
     - host: api-dev.starstalk.io
       paths:
@@ -41,25 +39,17 @@ resources:
 # No anti-affinity for dev — fine to co-locate on any node
 affinity: {}
 
-# NOTE: Until setup-vault-dev-path.sh is run on the Vault VM and
-# VAULT_DEV_ROLE_ID/VAULT_DEV_SECRET_ID are added to GitHub Secrets,
-# dev uses the same AppRole as prod (reads secret/starstalk → ENVIRONMENT=prod).
-# After Vault setup: service port will be reverted to 8080, probes to httpGet,
-# and secretEnv will switch to starstalk-vault-dev automatically via deploy workflow.
-
-# TEMPORARY: TCP probe on 443 while dev AppRole reads secret/starstalk (ENVIRONMENT=prod).
-# Reverts to httpGet on 8080 once dev AppRole reads secret/starstalk-dev.
 livenessProbe:
-  httpGet: null
-  tcpSocket:
-    port: 443
+  httpGet:
+    path: /health
+    port: 8080
   initialDelaySeconds: 10
   periodSeconds: 15
 
 readinessProbe:
-  httpGet: null
-  tcpSocket:
-    port: 443
+  httpGet:
+    path: /health
+    port: 8080
   initialDelaySeconds: 5
   periodSeconds: 10
 
