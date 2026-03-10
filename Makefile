@@ -286,7 +286,7 @@ cnpg-backup-now:
 
 ## update-node-dns: Point k3s node /etc/resolv.conf at AdGuard Home (192.168.0.96)
 update-node-dns:
-	SSH_KEY=$(HOME)/.ssh/github_wsl ./scripts/update-node-dns.sh
+	KUBECONFIG=$(KUBECONFIG) ./scripts/update-node-dns.sh
 
 ## security-status: Show status of all security components
 security-status:

@@ -11,7 +11,7 @@
 #   4. Enable Vault TLS listener (see comments at bottom)
 set -euo pipefail
 
-TSH="tsh ssh --proxy=teleport.starstalk.io -i ~/.local/share/tbot/identity/identity"
+TSH="tsh ssh --proxy=teleport.starstalk.io -i ${HOME}/.local/share/tbot/identity/identity"
 VAULT_NODE="starstalk-hc-vault"
 VAULT_ADDR="http://127.0.0.1:8200"
 

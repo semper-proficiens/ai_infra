@@ -13,20 +13,18 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE="ai-knowledge-storage"
-TSH="tsh ssh --proxy=teleport.starstalk.io -i ~/.local/share/tbot/identity/identity"
+TSH="tsh ssh --proxy=teleport.starstalk.io -i ${HOME}/.local/share/tbot/identity/identity"
 
 echo "==> Deploying AdGuard Home on ${NODE}..."
 
+# ── 1. Create dirs + write docker-compose ────────────────────────────────────
 $TSH root@${NODE} bash -s << 'REMOTE'
 set -euo pipefail
-
-# Create dirs
 mkdir -p /opt/adguard/work /opt/adguard/conf
 
-# Stop apache on port 53 if binding — adguard uses 53
-systemctl is-active --quiet apache2 && echo "Note: apache2 running on port 80, adguard uses 3000 for UI (no conflict)"
+systemctl is-active --quiet apache2 2>/dev/null && \
+  echo "Note: apache2 on port 80, AdGuard uses 3000 for UI (no conflict)" || true
 
-# Write docker-compose
 cat > /opt/adguard/docker-compose.yaml << 'COMPOSE'
 services:
   adguard:
@@ -38,22 +36,22 @@ services:
       - /opt/adguard/work:/opt/adguardhome/work
       - /opt/adguard/conf:/opt/adguardhome/conf
 COMPOSE
-
-# Only write base config if not already configured (preserve existing settings)
-if [[ ! -f /opt/adguard/conf/AdGuardHome.yaml ]]; then
-  echo "Writing base config..."
+echo "docker-compose.yaml written"
 REMOTE
 
-# Copy config file
+# ── 2. Copy config (always overwrite so rewrites stay current) ────────────────
+echo "==> Uploading AdGuardHome.yaml..."
 $TSH root@${NODE} "cat > /opt/adguard/conf/AdGuardHome.yaml" < "${SCRIPT_DIR}/AdGuardHome.yaml"
 
+# ── 3. Install docker if missing, then start ─────────────────────────────────
 $TSH root@${NODE} bash -s << 'REMOTE'
 set -euo pipefail
-else
-  echo "Config already exists — updating rewrites only (manual merge if needed)"
+
+if ! command -v docker &>/dev/null; then
+  echo "Installing Docker..."
+  curl -fsSL https://get.docker.com | sh
 fi
 
-# Pull and start
 cd /opt/adguard
 docker compose pull --quiet
 docker compose up -d

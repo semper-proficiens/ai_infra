@@ -1,40 +1,71 @@
 #!/usr/bin/env bash
 # update-node-dns.sh — Point k3s nodes at AdGuard Home for DNS
 #
-# Updates /etc/resolv.conf on all k3s nodes to use AdGuard Home
-# (192.168.0.96) as the primary DNS resolver.
-# Uses direct SSH (bootstrap access) since these nodes are not in Teleport.
+# Uses a privileged DaemonSet (hostPID + privileged initContainer) to write
+# /etc/resolv.conf on all k3s nodes. Idempotent and Teleport-safe (no direct SSH).
 set -euo pipefail
 
-SSH_KEY="${SSH_KEY:-${HOME}/.ssh/github_wsl}"
-SSH_USER="ubuntu"
+KUBECONFIG="${KUBECONFIG:-$(dirname "${BASH_SOURCE[0]}")/../kubeconfig}"
 ADGUARD_IP="192.168.0.96"
 
-K3S_NODES=(
-  "192.168.0.80"   # k3s-control
-  "192.168.0.81"   # k3s-worker-0
-  "192.168.0.82"   # k3s-worker-1
-)
+echo "==> Deploying DNS-update DaemonSet on all k3s nodes..."
 
-for NODE_IP in "${K3S_NODES[@]}"; do
-  echo "==> Updating DNS on ${NODE_IP}..."
-  ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i "${SSH_KEY}" \
-    "${SSH_USER}@${NODE_IP}" bash -s << REMOTE
-# Disable systemd-resolved managed resolv.conf
-if systemctl is-active --quiet systemd-resolved; then
-  systemctl disable --now systemd-resolved 2>/dev/null || true
-fi
+kubectl --kubeconfig="${KUBECONFIG}" apply -f - << EOF
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: update-node-dns
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: update-node-dns
+  template:
+    metadata:
+      labels:
+        app: update-node-dns
+    spec:
+      hostPID: true
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+      initContainers:
+        - name: update-dns
+          image: alpine:3.19
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              nsenter --mount=/proc/1/ns/mnt -- systemctl disable --now systemd-resolved 2>/dev/null || true
+              if [ -L /host/etc/resolv.conf ]; then rm /host/etc/resolv.conf; fi
+              printf 'nameserver ${ADGUARD_IP}\nnameserver 1.1.1.1\nsearch starstalk.internal svc.cluster.local\n' \
+                > /host/etc/resolv.conf
+              echo "DNS updated on \$(cat /host/etc/hostname 2>/dev/null || hostname)"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: host-etc
+              mountPath: /host/etc
+      containers:
+        - name: sleep
+          image: alpine:3.19
+          command: ["sleep", "infinity"]
+          resources:
+            requests: { cpu: 1m, memory: 4Mi }
+      volumes:
+        - name: host-etc
+          hostPath:
+            path: /etc
+EOF
 
-# Write static resolv.conf
-cat > /etc/resolv.conf << 'RESOLVCONF'
-nameserver ${ADGUARD_IP}
-nameserver 1.1.1.1
-search starstalk.internal svc.cluster.local
-RESOLVCONF
+echo "==> Waiting for DaemonSet to complete (30s)..."
+sleep 30
 
-echo "  DNS updated on ${NODE_IP}"
-REMOTE
-done
+kubectl --kubeconfig="${KUBECONFIG}" logs -n kube-system \
+  -l app=update-node-dns -c update-dns 2>/dev/null
+
+echo "==> Cleaning up DaemonSet..."
+kubectl --kubeconfig="${KUBECONFIG}" delete daemonset update-node-dns -n kube-system
 
 echo ""
 echo "==> All k3s nodes now resolve via AdGuard Home (${ADGUARD_IP})"
