@@ -18,11 +18,10 @@ spec:
   secretName: vault-tls
   duration: 2160h      # 90 days
   renewBefore: 720h    # renew 30 days before expiry
-  commonName: starstalk-hc-vault
+  commonName: vault.starstalk.internal
   dnsNames:
-    - starstalk-hc-vault
-    - starstalk-hc-vault.starstalk.internal
     - vault.starstalk.internal
+    - starstalk-hc-vault.starstalk.internal
   ipAddresses:
     - 192.168.0.74
   issuerRef:
