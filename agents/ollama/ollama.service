@@ -1,0 +1,21 @@
+[Unit]
+Description=Ollama LLM inference server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+# Run as the user who has CUDA/GPU access — change if needed.
+User=erniepy
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=5
+# Allow Ollama to use the GPU via WSL2 passthrough.
+Environment=OLLAMA_HOST=127.0.0.1:11434
+# Keep models loaded for 5 min after last use; evict when another model is requested.
+Environment=OLLAMA_KEEP_ALIVE=5m
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

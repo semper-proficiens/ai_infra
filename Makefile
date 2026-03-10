@@ -3,7 +3,8 @@
         renew-teleport-bot setup-vault-dev \
         apply-monitoring create-grafana-sa setup-alert-email \
         setup-loki upgrade-loki \
-        setup-minio minio-status minio-console
+        setup-minio minio-status minio-console \
+        setup-agents setup-ollama setup-bug-watcher setup-monitor
 
 TERRAFORM_DIR := terraform/environments/homelab
 TSH_PROXY     ?= teleport.starstalk.io
@@ -192,6 +193,26 @@ install-tbot-sync-timer:
 ## deploy-tbot-k8s: Deploy tbot inside k3s (kubernetes join method — no token ever needed)
 deploy-tbot-k8s:
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/teleport/
+
+# ── MinIO ─────────────────────────────────────────────────────────────────────
+
+# ── Local AI agents (WSL2) ────────────────────────────────────────────────────
+
+## setup-agents: Install all local AI agents (Ollama + bug-watcher + monitor)
+setup-agents:
+	bash agents/setup.sh
+
+## setup-ollama: Install Ollama + pull models (RTX 3060, CUDA via WSL2)
+setup-ollama:
+	bash agents/ollama/setup.sh
+
+## setup-bug-watcher: Build + install bug-watcher daemon (local LLM branch poller)
+setup-bug-watcher:
+	bash agents/bug-watcher/setup.sh
+
+## setup-monitor: Build + install monitor agent (infra health watcher)
+setup-monitor:
+	bash agents/monitor/setup.sh
 
 # ── MinIO ─────────────────────────────────────────────────────────────────────
 

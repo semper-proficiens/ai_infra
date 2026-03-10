@@ -1,0 +1,18 @@
+[Unit]
+Description=StarsTalk monitor agent (infra health watcher)
+After=network.target ollama.service
+Wants=ollama.service
+
+[Service]
+Type=simple
+User=erniepy
+EnvironmentFile=/etc/monitor-agent/config.env
+ExecStart=/usr/local/bin/monitor-agent
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+StateDirectory=monitor-agent
+
+[Install]
+WantedBy=multi-user.target
