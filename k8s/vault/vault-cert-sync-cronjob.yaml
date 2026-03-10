@@ -107,12 +107,12 @@ spec:
                     root@starstalk-hc-vault \
                     "cat > /opt/vault/tls/tls.key && chmod 640 /opt/vault/tls/tls.key"
 
-                  # Reload Vault to pick up new cert (graceful, no downtime)
+                  # Reload Vault to pick up new cert (SIGHUP — graceful, no downtime)
                   tsh ssh \
                     --proxy=teleport.starstalk.io:443 \
                     --identity=/tbot-identity/identity \
                     root@starstalk-hc-vault \
-                    "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=\$(cat /root/.vault-token) vault operator reload -tls-skip-verify && echo 'Vault reloaded'"
+                    "systemctl reload vault && echo 'Vault reloaded'"
 
                   echo "Vault TLS cert sync complete"
               volumeMounts:
