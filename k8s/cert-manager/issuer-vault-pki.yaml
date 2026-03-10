@@ -6,10 +6,13 @@
 #   3. Role "internal-services" created
 #   4. AppRole "cert-manager" created with policy allowing pki/sign/internal-services
 #
-# Then create the AppRole secret:
+# Required secrets (create once):
 #   kubectl create secret generic vault-pki-approle \
 #     --from-literal=roleId="${VAULT_CERTMANAGER_ROLE_ID}" \
 #     --from-literal=secretId="${VAULT_CERTMANAGER_SECRET_ID}" \
+#     --namespace cert-manager
+#   kubectl create secret generic vault-tls-ca \
+#     --from-file=ca.crt=<(vault read -field=certificate pki/cert/ca) \
 #     --namespace cert-manager
 ---
 apiVersion: cert-manager.io/v1
@@ -20,11 +23,14 @@ spec:
   vault:
     server: https://vault.starstalk.internal:8200
     path: pki/sign/internal-services
-    caBundle: ""   # populated by setup-vault-pki.sh (base64 CA cert)
+    # CA cert stored in secret to avoid inline base64 validation quirks
+    caBundleSecretRef:
+      name: vault-tls-ca
+      key: ca.crt
     auth:
       appRole:
         path: approle
-        roleId: ""  # populated from vault-pki-approle secret
+        roleId: "5911d901-8dfd-aceb-ec32-597a4189e5a3"
         secretRef:
           name: vault-pki-approle
           key: secretId
