@@ -7,6 +7,23 @@ terraform {
       version = "~> 0.69"
     }
   }
+
+  backend "s3" {
+    bucket = "terraform-state"
+    key    = "homelab/terraform.tfstate"
+    region = "us-east-1"
+
+    endpoints = {
+      s3 = "http://minio.starstalk.internal:31423"
+    }
+
+    # MinIO-specific: disable AWS-specific validation
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    use_path_style              = true
+  }
 }
 
 # Default provider = ssj1 (192.168.0.69)
