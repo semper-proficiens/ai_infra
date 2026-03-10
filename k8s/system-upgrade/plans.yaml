@@ -1,0 +1,44 @@
+# system-upgrade-controller Plans for k3s automatic upgrades
+#
+# Upgrade flow: server plan runs first (concurrency=1, cordon+drain),
+# then agent plan runs (waits for server plan via prepare step).
+# Channel: stable — tracks latest k3s stable release automatically.
+#
+# Apply: kubectl apply -f k8s/system-upgrade/plans.yaml
+# Status: kubectl get plans -n system-upgrade
+---
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: k3s-server
+  namespace: system-upgrade
+spec:
+  concurrency: 1
+  cordon: true
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/control-plane: "true"
+  serviceAccountName: system-upgrade
+  upgrade:
+    image: rancher/k3s-upgrade
+  channel: https://update.k3s.io/v1-release/channels/stable
+---
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: k3s-agent
+  namespace: system-upgrade
+spec:
+  concurrency: 1
+  cordon: true
+  nodeSelector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist
+  serviceAccountName: system-upgrade
+  prepare:
+    image: rancher/k3s-upgrade
+    args: [prepare, k3s-server]
+  upgrade:
+    image: rancher/k3s-upgrade
+  channel: https://update.k3s.io/v1-release/channels/stable
