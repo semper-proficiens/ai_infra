@@ -4,21 +4,29 @@
 # What it installs:
 #   - minio namespace
 #   - minio-credentials k8s Secret (root user + password)
-#   - Bitnami MinIO Helm release (distributed, 4 pods, erasure coding EC:2)
+#   - MinIO Helm release from charts.min.io (distributed, 4 pods, erasure coding EC:2)
 #
 # Fault tolerance:
-#   4 drives across 2 k3s workers (2 per node, ssj1 + ssj2).
+#   4 drives across worker nodes. With 2 workers: 2 per node, cross-node HA.
+#   With 1 worker: erasure coding only (drive fault tolerance, not node).
 #   Survives loss of any 2 drives. Node failure → read-only until node recovers.
 #
+# Credentials:
+#   Pass via .minio-creds file (same pattern as .deploy-creds) or env vars:
+#     MINIO_ROOT_USER=<user>
+#     MINIO_ROOT_PASSWORD=<password>
+#   NEVER inline credentials in shell commands — write to a creds file first.
+#
 # After running, update Vault secret/starstalk with:
-#   STORAGE_ENDPOINT  = http://minio.minio.svc.cluster.local:9000
-#   STORAGE_ACCESS_KEY = <the root user you set here>
-#   STORAGE_SECRET_KEY = <the root password you set here>
-#   STORAGE_BUCKET     = starstalk-media  (or whatever bucket you create)
+#   STORAGE_ENDPOINT   = http://minio.minio.svc.cluster.local:9000
+#   STORAGE_ACCESS_KEY = <MINIO_ROOT_USER>
+#   STORAGE_SECRET_KEY = <MINIO_ROOT_PASSWORD>
+#   STORAGE_BUCKET     = starstalk-prod  (or as needed)
 #
 # Prerequisites:
 #   - kubeconfig at ./kubeconfig (or set KUBECONFIG env var)
 #   - helm + kubectl in PATH
+#   - .minio-creds file or MINIO_ROOT_USER/MINIO_ROOT_PASSWORD env vars
 #
 set -euo pipefail
 
@@ -60,6 +68,12 @@ kubectl cluster-info --request-timeout=10s
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 
+# Load from .minio-creds if it exists (preferred — keeps creds out of shell history)
+if [[ -f "${REPO_ROOT}/.minio-creds" ]]; then
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/.minio-creds"
+fi
+
 prompt_if_empty MINIO_ROOT_USER     "MinIO root user (S3 access key, min 3 chars)"
 prompt_if_empty MINIO_ROOT_PASSWORD "MinIO root password (S3 secret key, min 8 chars)" true
 
@@ -72,41 +86,24 @@ kubectl apply -f "${REPO_ROOT}/k8s/minio/namespace.yaml"
 
 echo "==> Creating/refreshing minio-credentials secret..."
 kubectl create secret generic minio-credentials \
-  --from-literal=root-user="${MINIO_ROOT_USER}" \
-  --from-literal=root-password="${MINIO_ROOT_PASSWORD}" \
+  --from-literal=rootUser="${MINIO_ROOT_USER}" \
+  --from-literal=rootPassword="${MINIO_ROOT_PASSWORD}" \
   --namespace minio \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # ── Helm repo ─────────────────────────────────────────────────────────────────
 
-echo "==> Adding Bitnami Helm repo..."
-helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
-helm repo update bitnami
+echo "==> Adding MinIO Helm repo..."
+helm repo add minio-official https://charts.min.io/ 2>/dev/null || true
+helm repo update minio-official
 
 # ── MinIO ─────────────────────────────────────────────────────────────────────
 
 echo "==> Deploying MinIO (distributed, 4 pods)..."
-helm_install_or_upgrade minio bitnami/minio \
+helm_install_or_upgrade minio minio-official/minio \
   --namespace minio \
   -f "${REPO_ROOT}/helm/minio/values.yaml" \
   --wait --timeout 5m
-
-# ── Create default bucket ─────────────────────────────────────────────────────
-
-BUCKET="${MINIO_BUCKET:-starstalk-media}"
-echo "==> Waiting for MinIO pods to be ready before creating bucket..."
-kubectl rollout status statefulset/minio -n minio --timeout=5m
-
-echo "==> Creating bucket: ${BUCKET}"
-kubectl run minio-mc-init \
-  --image=minio/mc:latest \
-  --restart=Never \
-  --rm \
-  --attach \
-  --namespace=minio \
-  --env="MC_HOST_local=http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@minio.minio.svc.cluster.local:9000" \
-  -- mc mb --ignore-existing "local/${BUCKET}" 2>/dev/null || \
-  echo "    (bucket creation skipped — run manually if needed)"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
@@ -114,21 +111,20 @@ echo ""
 echo "==> MinIO is up!"
 echo ""
 echo "    Pods:"
-kubectl get pods -n minio -l app.kubernetes.io/name=minio
+kubectl get pods -n minio -l app=minio
 echo ""
 echo "    S3 endpoint (in-cluster): http://minio.minio.svc.cluster.local:9000"
 echo "    Console    (in-cluster): http://minio.minio.svc.cluster.local:9001"
-echo "    Default bucket:          ${BUCKET}"
 echo ""
-echo "    ┌─────────────────────────────────────────────────────────────┐"
-echo "    │  ACTION REQUIRED: update Vault secret/starstalk with:       │"
-echo "    │    STORAGE_ENDPOINT  = http://minio.minio.svc.cluster.local:9000 │"
-echo "    │    STORAGE_ACCESS_KEY = ${MINIO_ROOT_USER}                  │"
-echo "    │    STORAGE_SECRET_KEY = (the password you just set)         │"
-echo "    │    STORAGE_BUCKET     = ${BUCKET}                           │"
-echo "    └─────────────────────────────────────────────────────────────┘"
+echo "    ┌─────────────────────────────────────────────────────────────────┐"
+echo "    │  ACTION REQUIRED: update Vault secret/starstalk with:           │"
+echo "    │    STORAGE_ENDPOINT   = http://minio.minio.svc.cluster.local:9000 │"
+echo "    │    STORAGE_ACCESS_KEY = (your MINIO_ROOT_USER)                  │"
+echo "    │    STORAGE_SECRET_KEY = (your MINIO_ROOT_PASSWORD)              │"
+echo "    │    STORAGE_BUCKET     = starstalk-prod                          │"
+echo "    └─────────────────────────────────────────────────────────────────┘"
 echo ""
 echo "    Console port-forward:"
-echo "      kubectl port-forward svc/minio -n minio 9001:9001"
+echo "      kubectl port-forward svc/minio-console -n minio 9001:9001"
 echo "      Then open: http://localhost:9001"
 echo ""

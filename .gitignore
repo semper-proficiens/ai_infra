@@ -21,3 +21,4 @@ tbot/output/
 kubeconfig
 .alert-creds
 k8s/monitoring/alertmanager-config.yaml
+.minio-creds

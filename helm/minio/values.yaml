@@ -1,51 +1,56 @@
 # MinIO — distributed mode (4 pods, erasure coding EC:2)
+# Uses official MinIO Helm chart (https://charts.min.io/).
 #
-# Topology: 4 StatefulSet pods spread across k3s-worker-0 (ssj1) and
-# k3s-worker-1 (ssj2) via pod anti-affinity (2 per node).
+# Topology: 4 StatefulSet pods spread across worker nodes only (control plane
+# excluded via nodeAffinity). Requires at least 2 worker nodes for cross-node
+# redundancy. With 1 worker (current state): all 4 pods on k3s-worker-0 —
+# erasure coding protects against drive failure but NOT node failure.
+# Once k3s-worker-1 (ssj2) is added, pods redistribute automatically via
+# pod anti-affinity (2 per node) and full cross-node HA is achieved.
 #
-# Erasure set: 4 drives, 2 data + 2 parity.
-# Fault tolerance: survives loss of any 2 drives.
-# If one worker node goes down (2 drives lost), MinIO enters read-only mode —
-# data is preserved and reads continue; writes resume when the node recovers.
-#
-# Effective usable storage: 2 × 8Gi = 16Gi (50% of raw 32Gi).
-# Disk pressure per worker: 2 × 8Gi PVCs (local-path, thin-provisioned on local-lvm).
+# Erasure set: 4 drives, 2 data + 2 parity (EC:2).
+# Can lose any 2 drives. Node failure (2 drives): read-only until node recovers.
+# Effective usable storage: 16Gi (50% of 4 × 8Gi raw).
 #
 # In-cluster S3 endpoint: http://minio.minio.svc.cluster.local:9000
 # Console:               http://minio.minio.svc.cluster.local:9001
 
 mode: distributed
-replicaCount: 4
+replicas: 4
 
-auth:
-  # Credentials injected from minio-credentials secret (created by setup-minio.sh).
-  # Keys: root-user, root-password.
-  existingSecret: minio-credentials
+# Credentials loaded from minio-credentials k8s Secret.
+# Keys: rootUser, rootPassword — created by setup-minio.sh.
+existingSecret: minio-credentials
 
 persistence:
   enabled: true
   storageClass: local-path
   size: 8Gi
 
-# Spread pods across k3s workers — 2 pods per node.
+# Exclude control plane; prefer to spread across worker nodes.
 affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: DoesNotExist
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
       - weight: 100
         podAffinityTerm:
           labelSelector:
             matchLabels:
-              app.kubernetes.io/name: minio
+              app: minio
           topologyKey: kubernetes.io/hostname
 
 service:
   type: ClusterIP
-  ports:
-    api: 9000
-    console: 9001
+  port: 9000
 
-ingress:
-  enabled: false
+consoleService:
+  type: ClusterIP
+  port: 9001
 
 resources:
   requests:
@@ -54,8 +59,3 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-
-# Disable Prometheus ServiceMonitor (no PodMonitor CRD in this cluster yet).
-metrics:
-  serviceMonitor:
-    enabled: false
