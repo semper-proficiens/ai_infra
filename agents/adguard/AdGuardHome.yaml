@@ -17,7 +17,7 @@ filtering:
       answer: 192.168.0.74
       enabled: true
     - domain: minio.starstalk.internal
-      answer: 192.168.0.221
+      answer: 192.168.0.81
       enabled: true
     - domain: registry.starstalk.internal
       answer: 192.168.0.77

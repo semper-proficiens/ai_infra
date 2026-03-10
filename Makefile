@@ -10,7 +10,8 @@
         setup-cnpg-backup cnpg-backup-now update-node-dns \
         security-status setup-security
 
-TERRAFORM_DIR := terraform/environments/homelab
+TERRAFORM_DIR    := terraform/environments/homelab
+BACKEND_CONFIG   := $(CURDIR)/.backend.hcl
 TSH_PROXY     ?= teleport.starstalk.io
 TSH_IDENTITY  ?= $(HOME)/.local/share/tbot/identity/identity
 NODE          ?=
@@ -22,21 +23,25 @@ help:
 
 # ── Terraform ─────────────────────────────────────────────────────────────────
 
+## init: Terraform init (homelab) — also migrates local state to MinIO
+init:
+	tofu -chdir=$(TERRAFORM_DIR) init -backend-config=$(BACKEND_CONFIG)
+
 ## plan: Terraform plan (homelab)
 plan:
-	terraform -chdir=$(TERRAFORM_DIR) plan
+	tofu -chdir=$(TERRAFORM_DIR) plan
 
 ## apply: Terraform apply (homelab)
 apply:
-	terraform -chdir=$(TERRAFORM_DIR) apply
+	tofu -chdir=$(TERRAFORM_DIR) apply
 
 ## destroy: Terraform destroy (homelab)
 destroy:
-	terraform -chdir=$(TERRAFORM_DIR) destroy
+	tofu -chdir=$(TERRAFORM_DIR) destroy
 
 ## output: Show Terraform outputs
 output:
-	terraform -chdir=$(TERRAFORM_DIR) output
+	tofu -chdir=$(TERRAFORM_DIR) output
 
 # ── k3s ───────────────────────────────────────────────────────────────────────
 

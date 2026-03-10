@@ -39,6 +39,13 @@ env:
   TARGET_ENV: ${{ github.event.client_payload.environment || inputs.environment }}
   IMAGE_TAG:  ${{ github.event.client_payload.image_tag  || inputs.image_tag }}
 
+# Prevent concurrent deploys to the same environment from racing on the same
+# Helm release (e.g. two workflow_dispatch calls in quick succession).
+# cancel-in-progress: false → queue the second deploy rather than drop it.
+concurrency:
+  group: deploy-${{ github.event.client_payload.environment || inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
   # ── Deploy to dev (auto, no approval) ───────────────────────────────────────
   deploy-dev:
@@ -87,7 +94,7 @@ jobs:
             --namespace starstalk-dev \
             --set "image.tag=${{ env.IMAGE_TAG }}" \
             -f helm/starstalk/values-dev.yaml \
-            --wait --timeout 3m
+            --wait --timeout 5m
           # Force pod restart so the latest :dev image is always pulled.
           # Helm won't restart pods when the image tag is static (dev tag never changes).
           kubectl rollout restart deployment/starstalk-dev -n starstalk-dev
@@ -134,7 +141,7 @@ jobs:
             --namespace starstalk \
             --set "image.tag=${{ env.IMAGE_TAG }}" \
             -f helm/starstalk/values-homelab.yaml \
-            --wait --timeout 3m
+            --wait --timeout 5m
 
       - name: Verify rollout
         run: |
@@ -183,7 +190,7 @@ jobs:
             --namespace starstalk-dev \
             --set "image.tag=${{ env.IMAGE_TAG }}" \
             -f helm/starstalk/values-dev-v2.yaml \
-            --wait --timeout 3m
+            --wait --timeout 5m
           # Force pod restart so the latest :dev image is always pulled.
           kubectl rollout restart deployment/starstalk-dev-v2 -n starstalk-dev
 
@@ -229,7 +236,7 @@ jobs:
             --namespace starstalk \
             --set "image.tag=${{ env.IMAGE_TAG }}" \
             -f helm/starstalk/values-homelab-v2.yaml \
-            --wait --timeout 3m
+            --wait --timeout 5m
 
       - name: Verify rollout
         run: |
