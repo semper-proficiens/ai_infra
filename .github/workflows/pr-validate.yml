@@ -29,20 +29,17 @@ jobs:
 
       - name: Install tools (if missing)
         run: |
-          # yamllint
-          if ! command -v yamllint &>/dev/null; then
-            pip3 install yamllint --quiet
+          # yamllint + shellcheck — available in Ubuntu apt repos
+          MISSING=""
+          command -v yamllint   &>/dev/null || MISSING="$MISSING yamllint"
+          command -v shellcheck &>/dev/null || MISSING="$MISSING shellcheck"
+          if [[ -n "$MISSING" ]]; then
+            sudo apt-get install -y -qq $MISSING
           fi
-          # shellcheck
-          if ! command -v shellcheck &>/dev/null; then
-            apt-get install -y shellcheck -qq 2>/dev/null || \
-              curl -sL "https://github.com/koalaman/shellcheck/releases/latest/download/shellcheck-stable.linux.x86_64.tar.xz" \
-              | tar -xJ --strip-components=1 -C /usr/local/bin shellcheck-stable/shellcheck
-          fi
-          # kubeconform (validates k8s manifests against JSON schema)
+          # kubeconform — single binary download
           if ! command -v kubeconform &>/dev/null; then
             curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
-              | tar -xz -C /usr/local/bin kubeconform
+              | sudo tar -xz -C /usr/local/bin kubeconform
           fi
 
       - name: YAML lint
