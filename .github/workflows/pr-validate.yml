@@ -27,20 +27,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tools (if missing)
+      - name: Verify tools
         run: |
-          # yamllint + shellcheck — available in Ubuntu apt repos
-          MISSING=""
-          command -v yamllint   &>/dev/null || MISSING="$MISSING yamllint"
-          command -v shellcheck &>/dev/null || MISSING="$MISSING shellcheck"
-          if [[ -n "$MISSING" ]]; then
-            sudo apt-get install -y -qq $MISSING
-          fi
-          # kubeconform — single binary download
-          if ! command -v kubeconform &>/dev/null; then
-            curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
-              | sudo tar -xz -C /usr/local/bin kubeconform
-          fi
+          yamllint --version
+          shellcheck --version | head -1
+          kubeconform -v
 
       - name: YAML lint
         if: matrix.check == 'yaml'
