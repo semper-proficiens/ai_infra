@@ -1,0 +1,13 @@
+extends: relaxed
+rules:
+  line-length:
+    max: 200
+  comments:
+    min-spaces-from-content: 1
+  braces:
+    max-spaces-inside: 1
+  colons:
+    max-spaces-after: -1   # allow alignment spacing
+  truthy:
+    allowed-values: ['true', 'false']
+    check-keys: false

@@ -14,6 +14,12 @@
 #     --from-literal=password=<APP-PASSWORD> \
 #     --namespace starstalk
 #
+# Backup credentials (create once via setup-cnpg-backup.sh):
+#   kubectl create secret generic starstalk-pg-backup-s3 \
+#     --from-literal=ACCESS_KEY_ID=<minio-user> \
+#     --from-literal=ACCESS_SECRET_KEY=<minio-password> \
+#     --namespace starstalk
+#
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -51,9 +57,30 @@ spec:
     topologyKey: kubernetes.io/hostname
     podAntiAffinityType: preferred
 
+  # Continuous WAL archiving + scheduled base backups → k8s MinIO (minio namespace)
+  # Recovery: kubectl cnpg restore starstalk-pg --backup <name>
+  backup:
+    retentionPolicy: "30d"
+    barmanObjectStore:
+      destinationPath: s3://starstalk-pg-backups/
+      endpointURL: http://minio.minio.svc.cluster.local:9000
+      s3Credentials:
+        accessKeyId:
+          name: starstalk-pg-backup-s3
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: starstalk-pg-backup-s3
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+        maxParallel: 2
+      data:
+        compression: gzip
+        immediateCheckpoint: false
+
   # Monitoring: CloudNativePG exposes Prometheus metrics on port 9187
   monitoring:
-    enablePodMonitor: false
+    enablePodMonitor: true
 
   resources:
     requests:

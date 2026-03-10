@@ -1,0 +1,62 @@
+http:
+  address: 0.0.0.0:3000
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  upstream_dns:
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
+  bootstrap_dns:
+    - 1.1.1.1
+    - 8.8.8.8
+  upstream_mode: load_balance
+filtering:
+  rewrites:
+    - domain: vault.starstalk.internal
+      answer: 192.168.0.74
+      enabled: true
+    - domain: minio.starstalk.internal
+      answer: 192.168.0.221
+      enabled: true
+    - domain: registry.starstalk.internal
+      answer: 192.168.0.77
+      enabled: true
+    - domain: teleport.starstalk.internal
+      answer: 192.168.0.199
+      enabled: true
+    - domain: ssj1.starstalk.internal
+      answer: 192.168.0.69
+      enabled: true
+    - domain: ssj2.starstalk.internal
+      answer: 192.168.0.84
+      enabled: true
+    - domain: adguard.starstalk.internal
+      answer: 192.168.0.96
+      enabled: true
+    - domain: k3s-control.starstalk.internal
+      answer: 192.168.0.80
+      enabled: true
+    - domain: k3s-worker-0.starstalk.internal
+      answer: 192.168.0.81
+      enabled: true
+    - domain: k3s-worker-1.starstalk.internal
+      answer: 192.168.0.82
+      enabled: true
+  blocked_services:
+    schedule:
+      time_zone: Local
+  safe_search:
+    enabled: false
+log:
+  file: ""
+  verbose: false
+querylog:
+  enabled: true
+  file_enabled: true
+  interval: 2160h
+  size_memory: 1000
+statistics:
+  enabled: true
+  interval: 24h
+schema_version: 33

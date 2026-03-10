@@ -1,0 +1,33 @@
+# cert-manager Helm values
+# Installed via: helm upgrade --install cert-manager jetstack/cert-manager
+#   --namespace cert-manager --create-namespace -f this file
+crds:
+  enabled: true
+
+# Prometheus metrics
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true
+    namespace: monitoring
+
+# Resource limits appropriate for homelab
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+webhook:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+
+cainjector:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi

@@ -41,6 +41,21 @@ loki:
     retention_enabled: true
     delete_request_store: filesystem
 
+  # Ruler — evaluates LogQL alert rules, fires directly to Alertmanager.
+  # Rules are mounted from ConfigMap/loki-ruler-rules into /rules/fake/
+  # (tenant "fake" is the default when auth_enabled=false)
+  rulerConfig:
+    storage:
+      type: local
+      local:
+        directory: /rules
+    rule_path: /tmp/loki-ruler
+    alertmanager_url: http://alertmanager-operated.monitoring.svc.cluster.local:9093
+    ring:
+      kvstore:
+        store: inmemory
+    enable_api: true
+
 singleBinary:
   replicas: 1
   persistence:
@@ -54,6 +69,15 @@ singleBinary:
     limits:
       cpu: 500m
       memory: 512Mi
+
+  # Mount ruler rules from ConfigMap (apply loki-ruler-rules.yaml first)
+  extraVolumes:
+    - name: ruler-rules
+      configMap:
+        name: loki-ruler-rules
+  extraVolumeMounts:
+    - name: ruler-rules
+      mountPath: /rules/fake
 
 # Disable unused distributed components
 backend:

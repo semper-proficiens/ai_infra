@@ -1,0 +1,40 @@
+# CoreDNS custom zone for starstalk.internal
+#
+# k3s watches for a ConfigMap named "coredns-custom" in kube-system and
+# auto-includes its entries as additional server blocks. No restart needed.
+#
+# Usage:
+#   kubectl apply -f k8s/coredns/coredns-custom.yaml
+#
+# To add/remove hosts: edit the hosts block and re-apply.
+# CoreDNS hot-reloads the config within ~30s.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  starstalk.internal.server: |
+    starstalk.internal:53 {
+      hosts {
+        # Vault — LXC 107 on ssj1
+        192.168.0.74  vault.starstalk.internal
+
+        # Standalone MinIO — VMID 105 on ssj1 (v1 Go backend)
+        192.168.0.221 minio.starstalk.internal
+
+        # Local image registry — starstalk-runner LXC (VMID 110 on ssj1)
+        192.168.0.77  registry.starstalk.internal
+
+        # Teleport auth/proxy server
+        192.168.0.199 teleport.starstalk.internal
+
+        # Proxmox hypervisors
+        192.168.0.69  ssj1.starstalk.internal
+        192.168.0.84  ssj2.starstalk.internal
+
+        fallthrough
+      }
+      log
+      errors
+    }
