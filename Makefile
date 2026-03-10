@@ -4,7 +4,11 @@
         apply-monitoring create-grafana-sa setup-alert-email \
         setup-loki upgrade-loki \
         setup-minio minio-status minio-console \
-        setup-agents setup-ollama setup-bug-watcher setup-monitor
+        setup-agents setup-ollama setup-bug-watcher setup-monitor \
+        setup-adguard setup-coredns setup-cert-manager setup-vault-pki \
+        setup-network-policies apply-network-policies \
+        setup-cnpg-backup cnpg-backup-now update-node-dns \
+        security-status setup-security
 
 TERRAFORM_DIR := terraform/environments/homelab
 TSH_PROXY     ?= teleport.starstalk.io
@@ -228,3 +232,63 @@ minio-status:
 minio-console:
 	@echo "Opening MinIO console at http://localhost:9001 (Ctrl-C to stop)"
 	KUBECONFIG=$(KUBECONFIG) kubectl port-forward svc/minio -n minio 9001:9001
+
+# ── Security / TLS / DNS ──────────────────────────────────────────────────────
+
+## setup-security: Run all security bootstrap steps in order (idempotent)
+setup-security: setup-adguard setup-coredns apply-network-policies setup-cert-manager setup-cnpg-backup
+	@echo ""
+	@echo "Security baseline complete. Remaining manual steps:"
+	@echo "  1. Renew Teleport certs: make renew-teleport-bot"
+	@echo "  2. Enable Vault PKI:     make setup-vault-pki"
+	@echo "  3. Apply Vault issuer:   kubectl apply -f k8s/cert-manager/issuer-vault-pki.yaml"
+	@echo "  4. Update node DNS:      make update-node-dns"
+
+## setup-adguard: Deploy AdGuard Home on ai-knowledge-storage (192.168.0.96) as LAN DNS
+setup-adguard:
+	TSH_PROXY=$(TSH_PROXY) TSH_IDENTITY=$(TSH_IDENTITY) bash agents/adguard/setup.sh
+
+## setup-coredns: Apply coredns-custom ConfigMap (starstalk.internal zone in k3s)
+setup-coredns:
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/coredns/coredns-custom.yaml
+	@echo "CoreDNS will hot-reload within 30s. Test: kubectl run -it --rm dns-test --image=busybox --restart=Never -- nslookup vault.starstalk.internal"
+
+## setup-cert-manager: Install cert-manager + Let's Encrypt ClusterIssuer (requires .cloudflare-creds)
+setup-cert-manager:
+	KUBECONFIG=$(KUBECONFIG) ./scripts/setup-cert-manager.sh
+
+## setup-vault-pki: Enable Vault PKI engine + create internal CA (requires valid Teleport certs)
+setup-vault-pki:
+	./scripts/setup-vault-pki.sh
+
+## apply-network-policies: Apply NetworkPolicies to all namespaces
+apply-network-policies:
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/network-policies/
+	@echo "NetworkPolicies applied to: starstalk, starstalk-dev, minio, monitoring"
+
+## setup-cnpg-backup: Configure CNPG continuous WAL archiving + base backups to MinIO
+setup-cnpg-backup:
+	KUBECONFIG=$(KUBECONFIG) ./scripts/setup-cnpg-backup.sh
+
+## cnpg-backup-now: Trigger an immediate CNPG base backup
+cnpg-backup-now:
+	KUBECONFIG=$(KUBECONFIG) kubectl cnpg backup starstalk-pg -n starstalk --method barmanObjectStore
+
+## update-node-dns: Point k3s node /etc/resolv.conf at AdGuard Home (192.168.0.96)
+update-node-dns:
+	SSH_KEY=$(HOME)/.ssh/github_wsl ./scripts/update-node-dns.sh
+
+## security-status: Show status of all security components
+security-status:
+	@echo "=== cert-manager ==="
+	KUBECONFIG=$(KUBECONFIG) kubectl get clusterissuer 2>/dev/null || echo "Not installed"
+	@echo ""
+	@echo "=== NetworkPolicies ==="
+	KUBECONFIG=$(KUBECONFIG) kubectl get networkpolicy -A
+	@echo ""
+	@echo "=== CNPG Backup ==="
+	KUBECONFIG=$(KUBECONFIG) kubectl get cluster starstalk-pg -n starstalk \
+		-o jsonpath='Archiving={.status.conditions[?(@.type=="ContinuousArchiving")].status}{"\n"}' 2>/dev/null
+	@echo ""
+	@echo "=== Certificates ==="
+	KUBECONFIG=$(KUBECONFIG) kubectl get certificate -A 2>/dev/null || echo "No certificates yet"

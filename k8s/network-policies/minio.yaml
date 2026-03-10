@@ -1,0 +1,90 @@
+# NetworkPolicies for minio namespace
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: minio
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Allow starstalk apps → MinIO S3 API
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-starstalk-s3
+  namespace: minio
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: starstalk
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: starstalk-dev
+      ports:
+        - port: 9000
+          protocol: TCP
+---
+# Allow intra-MinIO traffic (erasure coding, replication)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-minio
+  namespace: minio
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: minio
+---
+# Allow Prometheus scraping
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: minio
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 9000
+          protocol: TCP
+---
+# Allow CloudNativePG (CNPG) backup agent → MinIO
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cnpg-backup
+  namespace: minio
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: starstalk
+          podSelector:
+            matchLabels:
+              cnpg.io/cluster: starstalk-pg
+      ports:
+        - port: 9000
+          protocol: TCP

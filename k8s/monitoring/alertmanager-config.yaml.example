@@ -23,6 +23,20 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
+    # Internal kube-prometheus-stack plumbing — never reaches inbox
+    - matchers:
+        - alertname =~ "Watchdog|InfoInhibitor"
+      receiver: blackhole
+    - matchers:
+        - severity = none
+      receiver: blackhole
+    - matchers:
+        - severity = info
+      receiver: blackhole
+    # Dev namespace: silence all alerts — deploys/restarts are expected noise
+    - matchers:
+        - namespace = starstalk-dev
+      receiver: blackhole
     # Critical: immediate, short repeat
     - matchers:
         - severity = critical
@@ -43,6 +57,9 @@ route:
       repeat_interval: 12h
 
 receivers:
+  - name: blackhole
+    # No config — alerts routed here are silently dropped
+
   - name: email-critical
     email_configs:
       - to: <YOUR_EMAIL>

@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: starstalk-logs-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  starstalk-logs.json: |
+    {
+      "title": "Starstalk — Application Logs",
+      "uid": "starstalk-logs",
+      "tags": ["starstalk", "logs"],
+      "timezone": "browser",
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "id": 1,
+          "title": "Prod — ERROR logs",
+          "type": "logs",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": true,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": true
+          },
+          "targets": [{
+            "datasource": { "type": "loki", "uid": "loki" },
+            "expr": "{namespace=\"starstalk\", container=\"starstalk\"} | json | level=\"ERROR\"",
+            "legendFormat": "",
+            "refId": "A"
+          }]
+        },
+        {
+          "id": 2,
+          "title": "Prod — all logs",
+          "type": "logs",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": true,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": true
+          },
+          "targets": [{
+            "datasource": { "type": "loki", "uid": "loki" },
+            "expr": "{namespace=\"starstalk\", container=\"starstalk\"}",
+            "legendFormat": "",
+            "refId": "A"
+          }]
+        },
+        {
+          "id": 3,
+          "title": "Dev — ERROR logs",
+          "type": "logs",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": true,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "targets": [{
+            "datasource": { "type": "loki", "uid": "loki" },
+            "expr": "{namespace=\"starstalk-dev\", container=\"starstalk\"} | json | level=\"ERROR\"",
+            "legendFormat": "",
+            "refId": "A"
+          }]
+        },
+        {
+          "id": 4,
+          "title": "Error rate — prod vs dev (per 5m)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "lineWidth": 2 }
+            }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "sum(count_over_time({namespace=\"starstalk\", container=\"starstalk\"} | json | level=\"ERROR\" [5m]))",
+              "legendFormat": "prod errors / 5m",
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "sum(count_over_time({namespace=\"starstalk-dev\", container=\"starstalk\"} | json | level=\"ERROR\" [5m]))",
+              "legendFormat": "dev errors / 5m",
+              "refId": "B"
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 38
+    }

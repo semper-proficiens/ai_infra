@@ -1,0 +1,47 @@
+# AdGuard Home base configuration — deployed to /opt/adguard/conf/AdGuardHome.yaml
+# on LXC 109 (ai-knowledge-storage, 192.168.0.96).
+#
+# Acts as the LAN DNS resolver for *.starstalk.internal private zone.
+# All Proxmox VMs, k3s nodes (via registries), and WSL2 should point
+# their DNS to 192.168.0.96 (or keep ISP resolver as fallback).
+#
+# Custom rewrites below mirror the CoreDNS coredns-custom.yaml entries
+# so both k8s pods and non-k8s VMs resolve the same names.
+http:
+  address: 0.0.0.0:3000     # AdGuard web UI (not port 80 — avoids apache conflict)
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  upstream_dns:
+    - https://1.1.1.1/dns-query     # Cloudflare DoH
+    - https://8.8.8.8/dns-query     # Google DoH
+  bootstrap_dns:
+    - 1.1.1.1
+    - 8.8.8.8
+  fallback_dns: []
+  rewrites:
+    # ── Internal services ────────────────────────────────────────────────
+    - domain: vault.starstalk.internal
+      answer: 192.168.0.74
+    - domain: minio.starstalk.internal
+      answer: 192.168.0.221
+    - domain: registry.starstalk.internal
+      answer: 192.168.0.77
+    - domain: teleport.starstalk.internal
+      answer: 192.168.0.199
+    - domain: ssj1.starstalk.internal
+      answer: 192.168.0.69
+    - domain: ssj2.starstalk.internal
+      answer: 192.168.0.84
+    - domain: adguard.starstalk.internal
+      answer: 192.168.0.96
+    # ── k3s nodes ────────────────────────────────────────────────────────
+    - domain: k3s-control.starstalk.internal
+      answer: 192.168.0.80
+    - domain: k3s-worker-0.starstalk.internal
+      answer: 192.168.0.81
+    - domain: k3s-worker-1.starstalk.internal
+      answer: 192.168.0.82
+log_file: ""
+verbose: false

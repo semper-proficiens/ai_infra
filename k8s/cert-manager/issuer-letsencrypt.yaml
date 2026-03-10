@@ -1,0 +1,50 @@
+# Let's Encrypt ClusterIssuer — Cloudflare DNS-01 challenge
+#
+# Prerequisites:
+#   kubectl create secret generic cloudflare-api-token \
+#     --from-literal=api-token="${CF_API_TOKEN}" \
+#     --namespace cert-manager
+#
+# Cloudflare token needs Zone:DNS:Edit + Zone:Zone:Read permissions.
+# The same token already used in .cloudflare-creds works.
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: theprogrammerq@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
+        selector:
+          dnsZones:
+            - starstalk.io
+---
+# Staging issuer for testing (no rate limits)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: theprogrammerq@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
+        selector:
+          dnsZones:
+            - starstalk.io

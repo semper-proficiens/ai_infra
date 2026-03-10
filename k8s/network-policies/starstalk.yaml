@@ -1,0 +1,82 @@
+# NetworkPolicies for starstalk (prod) namespace
+#
+# Model: default-deny ingress, explicit allow per traffic type.
+# Egress is permissive (backend calls Stripe, APNs, Brevo, etc.).
+---
+# Default deny all ingress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: starstalk
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Allow Traefik → starstalk backend (HTTP/HTTPS)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-ingress
+  namespace: starstalk
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: starstalk
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 8080
+          protocol: TCP
+        - port: 8082
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+---
+# Allow Prometheus → starstalk metrics scraping
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: starstalk
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 9187
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+        - port: 8082
+          protocol: TCP
+---
+# Allow intra-namespace traffic (CloudNativePG pods need to communicate)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace
+  namespace: starstalk
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: starstalk

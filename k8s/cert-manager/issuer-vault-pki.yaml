@@ -1,0 +1,30 @@
+# Vault PKI ClusterIssuer — internal CA for *.starstalk.internal certs
+#
+# Prerequisites (run scripts/setup-vault-pki.sh first):
+#   1. Vault PKI secrets engine enabled at path "pki/"
+#   2. Root CA generated for "Starstalk Internal CA"
+#   3. Role "internal-services" created
+#   4. AppRole "cert-manager" created with policy allowing pki/sign/internal-services
+#
+# Then create the AppRole secret:
+#   kubectl create secret generic vault-pki-approle \
+#     --from-literal=roleId="${VAULT_CERTMANAGER_ROLE_ID}" \
+#     --from-literal=secretId="${VAULT_CERTMANAGER_SECRET_ID}" \
+#     --namespace cert-manager
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-pki
+spec:
+  vault:
+    server: https://vault.starstalk.internal:8200
+    path: pki/sign/internal-services
+    caBundle: ""   # populated by setup-vault-pki.sh (base64 CA cert)
+    auth:
+      appRole:
+        path: approle
+        roleId: ""  # populated from vault-pki-approle secret
+        secretRef:
+          name: vault-pki-approle
+          key: secretId

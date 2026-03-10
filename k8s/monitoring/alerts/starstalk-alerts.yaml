@@ -57,7 +57,7 @@ spec:
             increase(kube_pod_container_status_restarts_total{
               namespace=~"starstalk|starstalk-dev"
             }[1h]) > 5
-          for: 0m
+          for: 5m
           labels:
             severity: warning
             team: starstalk
@@ -131,7 +131,7 @@ spec:
                 namespace=~"starstalk|starstalk-dev",
                 container!="", container!="POD"
               }
-            ) > 268435456
+            ) > 536870912
           for: 10m
           labels:
             severity: warning
@@ -139,7 +139,7 @@ spec:
           annotations:
             summary: "High memory in {{ $labels.namespace }} ({{ $value | humanize1024 }}B)"
             description: >
-              Namespace {{ $labels.namespace }} is using more than 256Mi memory
+              Namespace {{ $labels.namespace }} is using more than 512Mi memory
               for > 10 minutes. Check for memory leaks.
 
         - alert: StarstalkPodOOMKilled
@@ -148,7 +148,7 @@ spec:
               namespace=~"starstalk|starstalk-dev",
               reason="OOMKilled"
             } == 1
-          for: 0m
+          for: 2m
           labels:
             severity: critical
             team: starstalk
