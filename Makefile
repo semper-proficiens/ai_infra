@@ -272,7 +272,17 @@ setup-cnpg-backup:
 
 ## cnpg-backup-now: Trigger an immediate CNPG base backup
 cnpg-backup-now:
-	KUBECONFIG=$(KUBECONFIG) kubectl cnpg backup starstalk-pg -n starstalk --method barmanObjectStore
+	@printf '%s\n' \
+	  'apiVersion: postgresql.cnpg.io/v1' \
+	  'kind: Backup' \
+	  'metadata:' \
+	  '  name: starstalk-pg-backup-'"$$(date +%Y%m%d%H%M)" \
+	  '  namespace: starstalk' \
+	  'spec:' \
+	  '  cluster:' \
+	  '    name: starstalk-pg' \
+	  '  method: barmanObjectStore' \
+	  | KUBECONFIG=$(KUBECONFIG) kubectl apply -f -
 
 ## update-node-dns: Point k3s node /etc/resolv.conf at AdGuard Home (192.168.0.96)
 update-node-dns:
