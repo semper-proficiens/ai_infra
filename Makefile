@@ -2,7 +2,8 @@
         status ssh logs seed-runner-env setup-runner \
         renew-teleport-bot setup-vault-dev \
         apply-monitoring create-grafana-sa setup-alert-email \
-        setup-loki upgrade-loki
+        setup-loki upgrade-loki \
+        setup-minio minio-status minio-console
 
 TERRAFORM_DIR := terraform/environments/homelab
 TSH_PROXY     ?= teleport.starstalk.io
@@ -162,9 +163,7 @@ upgrade-loki:
 		--wait --timeout=5m
 	KUBECONFIG=$(KUBECONFIG) helm upgrade --install promtail grafana/promtail \
 		--namespace monitoring \
-		--set 'config.clients[0].url=http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push' \
-		--set resources.requests.memory=64Mi \
-		--set resources.limits.memory=128Mi \
+		-f k8s/monitoring/promtail-values.yaml \
 		--wait --timeout=3m
 	@echo "Loki + Promtail upgraded. Query logs at grafana.starstalk.io → Explore → Loki"
 
@@ -193,3 +192,18 @@ install-tbot-sync-timer:
 ## deploy-tbot-k8s: Deploy tbot inside k3s (kubernetes join method — no token ever needed)
 deploy-tbot-k8s:
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f k8s/teleport/
+
+# ── MinIO ─────────────────────────────────────────────────────────────────────
+
+## setup-minio: Deploy distributed MinIO to k3s (4 pods, erasure coding EC:2)
+setup-minio:
+	KUBECONFIG=$(KUBECONFIG) ./scripts/setup-minio.sh
+
+## minio-status: Show MinIO pod and StatefulSet status
+minio-status:
+	KUBECONFIG=$(KUBECONFIG) kubectl get statefulset,pods -n minio -l app.kubernetes.io/name=minio
+
+## minio-console: Port-forward MinIO console to localhost:9001
+minio-console:
+	@echo "Opening MinIO console at http://localhost:9001 (Ctrl-C to stop)"
+	KUBECONFIG=$(KUBECONFIG) kubectl port-forward svc/minio -n minio 9001:9001
