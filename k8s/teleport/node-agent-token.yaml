@@ -1,0 +1,27 @@
+# ProvisionToken for k3s node SSH agents (kubernetes join method)
+#
+# Apply ONCE on the Teleport auth server:
+#   tsh ssh root@tp-cluster-node "tctl create -f /tmp/node-agent-token.yaml"
+# or copy the file first:
+#   tsh scp k8s/teleport/node-agent-token.yaml root@tp-cluster-node:/tmp/
+#   tsh ssh root@tp-cluster-node "tctl create -f /tmp/node-agent-token.yaml"
+#
+# Uses the same k3s JWKS as the tbot token — no stored secret, auto-validates
+# service account JWTs from the teleport-node ServiceAccount.
+kind: token
+version: v2
+metadata:
+  name: k3s-node-agent
+spec:
+  roles: [Node]
+  join_method: kubernetes
+  kubernetes:
+    allow:
+      - service_account: "teleport:teleport-node"
+    type: static_jwks
+    static_jwks:
+      allowed_audiences:
+        - https://kubernetes.default.svc.cluster.local
+        - k3s
+      jwks: |
+        {"keys":[{"use":"sig","kty":"RSA","kid":"OEhlbUTj-RV90e-j4vfIbuf4ubNGnuBQ2bucWD1noUE","alg":"RS256","n":"vx-CbG5kOpOOdUQfUNAS4nnZ0tKXhczM26LgkA3U796xjzHvlpEV53PB__6rcrgniPPd8LZEPO9xT3R5KkUaaiJpE81NglF9iMMHeFlf22CJZsfYQFJywecSrQ9S9irbBv9rAYJZJZzemM00bphkNTM3Pg6Q_SDlpzC00QQipTWM8apBjsDXuVjtjZNssBCKrgAvSJSiya9p7YWEhk4pFmKbIRioxsmBhUN8HAXsUhwjqG1CluojhGTxkwg50vuK3inV3_2epKlafklcy5N6XaFEec84nNs9FdZ0C8KCJwTEN-lmpQ78W7mYq7yw1y7U_8VeM86xfVTi_281Ge69Yw","e":"AQAB"}]}
