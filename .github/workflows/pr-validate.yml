@@ -1,0 +1,132 @@
+name: PR Validate & Auto-Merge
+
+# Validates infra PRs (YAML, Helm, shell scripts, k8s manifests) then
+# squash-merges automatically when all checks pass.
+#
+# Security note: pull_request trigger on a public repo means fork PRs can
+# run on the self-hosted runner. Mitigated by:
+#   - Auto-merge only runs for same-repo branches (not forks)
+#   - No deploy secrets are accessed here (only validate-jobs run)
+#   - Runner LXC is unprivileged with no host access
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  # ── Static validation ────────────────────────────────────────────────────────
+  validate:
+    name: Validate (${{ matrix.check }})
+    runs-on: [self-hosted, proxmox]
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [yaml, shell, helm, manifests]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools (if missing)
+        run: |
+          # yamllint
+          if ! command -v yamllint &>/dev/null; then
+            pip3 install yamllint --quiet
+          fi
+          # shellcheck
+          if ! command -v shellcheck &>/dev/null; then
+            apt-get install -y shellcheck -qq 2>/dev/null || \
+              curl -sL "https://github.com/koalaman/shellcheck/releases/latest/download/shellcheck-stable.linux.x86_64.tar.xz" \
+              | tar -xJ --strip-components=1 -C /usr/local/bin shellcheck-stable/shellcheck
+          fi
+          # kubeconform (validates k8s manifests against JSON schema)
+          if ! command -v kubeconform &>/dev/null; then
+            curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
+              | tar -xz -C /usr/local/bin kubeconform
+          fi
+
+      - name: YAML lint
+        if: matrix.check == 'yaml'
+        run: |
+          # Exclude: helm/templates (Go syntax breaks yamllint),
+          #          monitoring/dashboards (embedded JSON, long lines expected)
+          find k8s/ agents/ .github/workflows/ -name "*.yaml" -o -name "*.yml" \
+            | grep -v 'monitoring/dashboards' \
+            | xargs yamllint -c .yamllint.yaml
+
+      - name: Shell lint (shellcheck)
+        if: matrix.check == 'shell'
+        run: |
+          # --severity=error: block on real bugs (unquoted vars, bad redirects, etc.)
+          # Run shellcheck --severity=warning locally for full style feedback
+          find scripts/ agents/ -name "*.sh" -print0 \
+            | xargs -0 shellcheck --severity=error
+
+      - name: Helm lint
+        if: matrix.check == 'helm'
+        run: |
+          # Only lint directories that are full charts (have Chart.yaml)
+          for chart in helm/*/; do
+            if [[ -f "${chart}Chart.yaml" ]]; then
+              echo "==> helm lint ${chart}"
+              helm lint "${chart}" --strict
+            else
+              echo "==> Skipping ${chart} (values-only directory, no Chart.yaml)"
+            fi
+          done
+
+      - name: Kubernetes manifest validation (kubeconform)
+        if: matrix.check == 'manifests'
+        run: |
+          # --ignore-missing-schemas skips CRD instances (CNPG Cluster,
+          # ClusterIssuer, etc.) that kubeconform doesn't have schemas for.
+          find k8s/ -name "*.yaml" -print0 \
+            | xargs -0 kubeconform \
+                --strict \
+                --ignore-missing-schemas \
+                --kubernetes-version 1.31.0 \
+                --summary
+
+  # ── Auto-merge (squash) ──────────────────────────────────────────────────────
+  auto-merge:
+    name: Auto-Merge
+    needs: validate
+    runs-on: [self-hosted, proxmox]
+    # Only merge branches from this repo (not forks)
+    if: |
+      success() &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Squash merge + delete branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge ${{ github.event.number }} \
+            --squash \
+            --delete-branch \
+            --repo ${{ github.repository }}
+
+      - name: Post merge summary
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.number }} \
+            --repo ${{ github.repository }} \
+            --body "$(cat <<'EOF'
+          ✅ **PR auto-merged** — all checks passed.
+
+          | Check | Result |
+          |---|---|
+          | YAML lint | ✅ |
+          | Shell lint | ✅ |
+          | Helm lint | ✅ |
+          | k8s manifests | ✅ |
+          EOF
+          )"
