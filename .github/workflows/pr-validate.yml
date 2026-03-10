@@ -66,9 +66,14 @@ jobs:
       - name: Kubernetes manifest validation (kubeconform)
         if: matrix.check == 'manifests'
         run: |
-          # --ignore-missing-schemas skips CRD instances (CNPG Cluster,
-          # ClusterIssuer, etc.) that kubeconform doesn't have schemas for.
-          find k8s/ -name "*.yaml" -print0 \
+          # Exclude: Helm values files (*-values.yaml, helm-values.yaml),
+          #          Teleport resources (k8s/teleport/ uses Teleport-specific format)
+          # --ignore-missing-schemas skips CRD instances (CNPG, ClusterIssuer, etc.)
+          find k8s/ -name "*.yaml" \
+            ! -name "*-values.yaml" \
+            ! -name "helm-values.yaml" \
+            ! -path "*/teleport/*" \
+            -print0 \
             | xargs -0 kubeconform \
                 --strict \
                 --ignore-missing-schemas \
