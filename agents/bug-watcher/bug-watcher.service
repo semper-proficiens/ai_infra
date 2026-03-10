@@ -1,0 +1,23 @@
+[Unit]
+Description=StarsTalk bug-watcher daemon (local LLM branch poller)
+After=network.target ollama.service
+Wants=ollama.service
+
+[Service]
+Type=simple
+User=erniepy
+WorkingDirectory=/home/erniepy/gh_repos/starstalk
+EnvironmentFile=/etc/bug-watcher/config.env
+ExecStart=/usr/local/bin/bug-fix-agent --daemon
+Restart=on-failure
+RestartSec=15
+# Give git ops enough time per branch (agent can take several minutes).
+TimeoutStartSec=60
+StandardOutput=journal
+StandardError=journal
+# Create state directory on first start.
+StateDirectory=bug-watcher
+RuntimeDirectory=bug-watcher
+
+[Install]
+WantedBy=multi-user.target
