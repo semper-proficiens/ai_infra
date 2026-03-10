@@ -1,0 +1,23 @@
+# Traefik Ingress for minio.starstalk.internal → MinIO S3 API
+# Exposed on Traefik NodePort 31423 (HTTP/80), resolved via AdGuard rewrite → 192.168.0.81
+# Used for: Terraform remote state, CNPG backup config, internal tooling
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio-internal
+  namespace: minio
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: minio.starstalk.internal
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9000
