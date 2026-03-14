@@ -61,6 +61,7 @@ env:
   DB_HOST: "starstalk-pg-dev-rw.starstalk-dev.svc.cluster.local"
   DB_PORT: "5432"
   VAULT_SECRET_PATH: "starstalk-dev"
+  MINIO_ENDPOINT: "https://minio.starstalk.io"
 
 # Vault creds — deploy workflow creates this secret from GitHub Secrets.
 # Uses VAULT_DEV_ROLE_ID/VAULT_DEV_SECRET_ID if set (dev AppRole, reads secret/starstalk-dev).
